@@ -1,0 +1,374 @@
+[
+ {
+  "family": "Inter",
+  "note": "sans · nötr, modern",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "Inter-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "Inter-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Inter-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Inter-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Inter-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Inter-800.ttf"
+   },
+   {
+    "weight": 900,
+    "file": "Inter-900.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Montserrat",
+  "note": "sans · geometrik, güçlü başlık",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "Montserrat-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "Montserrat-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Montserrat-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Montserrat-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Montserrat-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Montserrat-800.ttf"
+   },
+   {
+    "weight": 900,
+    "file": "Montserrat-900.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Plus Jakarta Sans",
+  "note": "sans · yumuşak, çağdaş",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "PlusJakartaSans-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "PlusJakartaSans-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "PlusJakartaSans-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "PlusJakartaSans-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "PlusJakartaSans-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "PlusJakartaSans-800.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Space Grotesk",
+  "note": "sans · teknik, grotesk",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "SpaceGrotesk-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "SpaceGrotesk-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "SpaceGrotesk-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "SpaceGrotesk-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "SpaceGrotesk-700.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Manrope",
+  "note": "sans · sade, okunaklı",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "Manrope-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "Manrope-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Manrope-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Manrope-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Manrope-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Manrope-800.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Outfit",
+  "note": "sans · geometrik, yuvarlak",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "Outfit-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "Outfit-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Outfit-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Outfit-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Outfit-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Outfit-800.ttf"
+   },
+   {
+    "weight": 900,
+    "file": "Outfit-900.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Sora",
+  "note": "sans · fütüristik",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "Sora-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "Sora-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Sora-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Sora-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Sora-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Sora-800.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Syne",
+  "note": "display · sanatsal, geniş",
+  "faces": [
+   {
+    "weight": 400,
+    "file": "Syne-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Syne-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Syne-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Syne-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Syne-800.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Unbounded",
+  "note": "display · iri, oyuncu",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "Unbounded-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "Unbounded-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Unbounded-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Unbounded-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Unbounded-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Unbounded-800.ttf"
+   },
+   {
+    "weight": 900,
+    "file": "Unbounded-900.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Playfair Display",
+  "note": "serif · lüks, editoryal",
+  "faces": [
+   {
+    "weight": 400,
+    "file": "PlayfairDisplay-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "PlayfairDisplay-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "PlayfairDisplay-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "PlayfairDisplay-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "PlayfairDisplay-800.ttf"
+   },
+   {
+    "weight": 900,
+    "file": "PlayfairDisplay-900.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Fraunces",
+  "note": "serif · sıcak, karakterli",
+  "faces": [
+   {
+    "weight": 300,
+    "file": "Fraunces-300.ttf"
+   },
+   {
+    "weight": 400,
+    "file": "Fraunces-400.ttf"
+   },
+   {
+    "weight": 500,
+    "file": "Fraunces-500.ttf"
+   },
+   {
+    "weight": 600,
+    "file": "Fraunces-600.ttf"
+   },
+   {
+    "weight": 700,
+    "file": "Fraunces-700.ttf"
+   },
+   {
+    "weight": 800,
+    "file": "Fraunces-800.ttf"
+   },
+   {
+    "weight": 900,
+    "file": "Fraunces-900.ttf"
+   }
+  ]
+ },
+ {
+  "family": "DM Serif Display",
+  "note": "serif · zarif başlık (yalnız 400)",
+  "faces": [
+   {
+    "weight": 400,
+    "file": "DMSerifDisplay-400.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Bebas Neue",
+  "note": "display · dar, büyük harf (yalnız 400)",
+  "faces": [
+   {
+    "weight": 400,
+    "file": "BebasNeue-400.ttf"
+   }
+  ]
+ },
+ {
+  "family": "Archivo Black",
+  "note": "display · çok kalın (yalnız 400)",
+  "faces": [
+   {
+    "weight": 400,
+    "file": "ArchivoBlack-400.ttf"
+   }
+  ]
+ }
+]

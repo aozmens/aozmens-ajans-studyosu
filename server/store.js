@@ -187,6 +187,13 @@ export function migrateCompany(c) {
   }
   if (c.styleGuide === undefined) c.styleGuide = null;
   if (c.brandProfile === undefined) c.brandProfile = null;
+  // Logo projelerine sonradan eklenen alanlar: örnek logolar, eskiz taraması, cevaplar, ikon yolu
+  for (const p of c.logoProjects) {
+    if (!Array.isArray(p.refs)) p.refs = [];
+    if (!p.answers || typeof p.answers !== 'object') p.answers = {};
+    if (p.scan === undefined) p.scan = null;
+    if (!p.iconMode) p.iconMode = 'tasarla';
+  }
 }
 
 export const listCompanies = () => db.companies.map(publicCompany);

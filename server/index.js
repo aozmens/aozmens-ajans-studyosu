@@ -274,6 +274,9 @@ app.patch(`${L}/:pid`, h((req) => logo.updateProject(req.params.id, req.params.p
 app.delete(`${L}/:pid`, h((req) => logo.deleteProject(req.params.id, req.params.pid)));
 app.post(`${L}/:pid/sketches`, h((req) => logo.addSketch(req.params.id, req.params.pid, req.body.dataUrl, req.body.name)));
 app.delete(`${L}/:pid/sketches/:sid`, h((req) => logo.removeSketch(req.params.id, req.params.pid, req.params.sid)));
+app.post(`${L}/:pid/refs`, h((req) => logo.addSketch(req.params.id, req.params.pid, req.body.dataUrl, req.body.name || 'Örnek logo', 'refs')));
+app.delete(`${L}/:pid/refs/:sid`, h((req) => logo.removeSketch(req.params.id, req.params.pid, req.params.sid, 'refs')));
+app.post(`${L}/:pid/scan`, h((req) => { bg('Eskiz taraması', () => logo.scanSketch(req.params.id, req.params.pid)); }));
 app.post(`${L}/:pid/concepts`, h((req) => { bg('Logo konseptleri', () => logo.generateConcepts(req.params.id, req.params.pid, req.body)); }));
 app.post(`${L}/:pid/concepts/:kid/revise`, h((req) => { bg('Logo revizyonu', () => logo.reviseConcept(req.params.id, req.params.pid, req.params.kid, req.body.feedback, { variations: +req.body.variations || 0 })); }));
 app.post(`${L}/:pid/concepts/:kid/undo`, h((req) => logo.undoConcept(req.params.id, req.params.pid, req.params.kid)));

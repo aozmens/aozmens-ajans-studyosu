@@ -12,6 +12,9 @@ function reply(text) {
   if (/tasarlanacak içerik listesi/.test(t)) {
     return '```json\n[{"no":1,"tarih":"2026-11-02","gun":"Pazartesi","yayin_saati":"19:00","platform":"Instagram","format":"post","konu":"Lansman","gorsel_baslik":"Yeni Sezon","aciklama":"Merhaba","hashtagler":["#test"],"ai_gorsel_prompt":"coffee cup on marble"},{"no":2,"tarih":"2026-11-04","platform":"Instagram","format":"carousel","konu":"İpuçları","gorsel_baslik":"3 İpucu","slaytlar":[{"baslik":"3 İpucu","metin":"Kaydır"},{"baslik":"Bir","metin":"Su"},{"baslik":"Son","metin":"Takip et"}],"ai_gorsel_prompt":""}]\n```';
   }
+  if (/Görevin: eskizi tara/.test(t)) {
+    return '```json\n{"okuma":"Daire içinde bir fincan.","sorular":[{"id":"stil","soru":"Hangi stil?","secenekler":["Minimal","Holografik","Geometrik"],"coklu":false},{"id":"yazi","soru":"Yazı karakteri?","secenekler":["Serif","Sans"],"coklu":false}]}\n```';
+  }
   if (/Logo SVG kuralları/.test(t) || /logo setini/.test(t) || /uygulama ikonu/i.test(t)) {
     const one = (i) => `### Konsept ${i}: Deneme ${i}\nGerekçe: Basit daire ve yazı.\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000"><circle cx="500" cy="400" r="200" fill="#C8102E"/><text x="500" y="800" text-anchor="middle" font-family="Montserrat" font-weight="800" font-size="120" letter-spacing="4" fill="#111">KAHVE ${i}</text></svg>`;
     return [1, 2, 3, 4].map(one).join('\n\n');

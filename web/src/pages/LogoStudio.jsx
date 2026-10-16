@@ -1,4 +1,4 @@
-// Logo Stüdyosu: brif, eskiz alanı, konseptler, revizyon/varyasyon, final logo seti, uygulama ikonları, SVG + PNG çıktı.
+// Logo Stüdyosu: brif, eskiz alanı + tarama soruları, ikon yolu, renk paleti, örnek logolar, konseptler, revizyon/varyasyon, final logo seti, uygulama ikonları, SVG + PNG çıktı.
 import React, { useEffect, useRef, useState } from 'react';
 import { api, readAsDataUrl, download } from '../api.js';
 import { Icon, Modal, Empty, AsyncButton, FilePick, UsageLine, toast, toastErr, confirmAsk } from '../ui.jsx';
@@ -42,6 +42,10 @@ export default function LogoStudio({ c, reload }) {
       {p.error && <div className="err-box"><Icon name="alert" />{p.error}</div>}
       <Brief c={c} p={p} reload={reload} />
       <Sketches c={c} p={p} reload={reload} />
+      <ScanQuestions c={c} p={p} reload={reload} />
+      <IconMode c={c} p={p} />
+      <PalettePicker c={c} p={p} reload={reload} />
+      <RefLogos c={c} p={p} reload={reload} />
       <Concepts c={c} p={p} reload={reload} />
       {p.final && <Final c={c} p={p} reload={reload} />}
     </div>
@@ -53,8 +57,7 @@ const prev = (c, p, kind, item, w = 600) => `${base(c, p)}/preview/${kind}/${ite
 
 function Brief({ c, p, reload }) {
   const [f, setF] = useState(p);
-  const [colors, setColors] = useState((p.colors || []).join(', '));
-  useEffect(() => { setF(p); setColors((p.colors || []).join(', ')); }, [p.id]);
+  useEffect(() => { setF(p); }, [p.id]);
   const save = async (patch) => {
     const next = { ...f, ...patch };
     setF(next);
@@ -68,8 +71,7 @@ function Brief({ c, p, reload }) {
         <div className="field"><label>Logo türü</label>
           <select className="select" value={f.logoType} onChange={(e) => save({ logoType: e.target.value })}>{TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
         </div>
-        <div className="field"><label>Renkler (HEX, virgülle)</label><input className="input mono" value={colors} onChange={(e) => setColors(e.target.value)} onBlur={() => save({ colors: colors.split(/[,\s]+/).filter((x) => /^#[0-9a-f]{3,8}$/i.test(x)) })} /></div>
-        <div className="field"><label>İstenen stil</label><input className="input" placeholder="ör. minimal, geometrik, premium" value={f.style || ''} onChange={(e) => setF({ ...f, style: e.target.value })} onBlur={() => save({ style: f.style })} /></div>
+        <div className="field"><label>İstenen stil (isteğe bağlı)</label><input className="input" placeholder="ör. minimal, geometrik, premium" value={f.style || ''} onChange={(e) => setF({ ...f, style: e.target.value })} onBlur={() => save({ style: f.style })} /></div>
         <div className="field" style={{ gridColumn: 'span 2' }}><label>Anahtar kelimeler / çağrışımlar</label><input className="input" placeholder="ör. dağ, güneş, kahve çekirdeği, güven" value={f.keywords || ''} onChange={(e) => setF({ ...f, keywords: e.target.value })} onBlur={() => save({ keywords: f.keywords })} /></div>
         <div className="field" style={{ gridColumn: '1 / -1' }}><label>Notlar</label><textarea className="textarea" style={{ minHeight: 60 }} placeholder="Neyi anlatsın, nelerden kaçınsın, beğendiğin logolar…" value={f.brief || ''} onChange={(e) => setF({ ...f, brief: e.target.value })} onBlur={() => save({ brief: f.brief })} /></div>
       </div>
@@ -84,12 +86,13 @@ function Sketches({ c, p, reload }) {
   return (
     <div className="card pad stack">
       <div className="row between">
-        <div><h3>Eskizler</h3><div className="small muted">Tasarımcı son 3 eskizi temel alır.</div></div>
+        <div><h3>1. Eskiz</h3><div className="small muted">Çiz ya da kâğıttaki eskizin / hazır ikonunun fotoğrafını yükle. Tasarımcı son 3 eskizi temel alır.</div></div>
         <div className="row">
           <FilePick className="btn sm" accept="image/*" onFiles={async (files) => {
             try { for (const f of files) await api.post(`${base(c, p)}/sketches`, { dataUrl: await readAsDataUrl(f), name: f.name }); reload(); } catch (e) { toastErr(e); }
           }}><Icon name="upload" />Eskiz fotoğrafı yükle</FilePick>
-          <button className="btn sm primary" onClick={() => setDraw(true)}><Icon name="brush" />Eskiz çiz</button>
+          <button className="btn sm" onClick={() => setDraw(true)}><Icon name="brush" />Eskiz çiz</button>
+          <AsyncButton className="btn sm primary" disabled={p.busy || !p.sketches.length} title={p.sketches.length ? 'Tasarımcı eskizi inceler ve 2-3 soru sorar' : 'Önce bir eskiz ekle'} onClick={async () => { await api.post(`${base(c, p)}/scan`); toast('Eskiz taranıyor…'); reload(); }}>{p.busy ? <span className="spinner sm" /> : <Icon name="eye" />}{p.scan ? 'Yeniden tara' : 'Eskizi tara'}</AsyncButton>
         </div>
       </div>
       {p.sketches.length ? (
@@ -177,6 +180,146 @@ function SketchPad({ onClose, onSave }) {
   );
 }
 
+// ---------------- eskiz taraması: tasarımcının okuması ve soruları ----------------
+
+function ScanQuestions({ c, p, reload }) {
+  const [ans, setAns] = useState(p.answers || {});
+  useEffect(() => setAns(p.answers || {}), [p.id, p.scan?.at]);
+  if (!p.scan) return null;
+  const pick = (q, opt) => {
+    const cur = ans[q.id];
+    let v;
+    if (q.coklu) {
+      const arr = Array.isArray(cur) ? cur : cur ? [cur] : [];
+      v = arr.includes(opt) ? arr.filter((x) => x !== opt) : [...arr, opt];
+    } else v = cur === opt ? '' : opt;
+    const next = { ...ans, [q.id]: v };
+    setAns(next);
+    api.patch(base(c, p), { answers: next }).then(reload).catch(toastErr);
+  };
+  const isOn = (q, opt) => (Array.isArray(ans[q.id]) ? ans[q.id].includes(opt) : ans[q.id] === opt);
+  const answered = p.scan.questions.filter((q) => (Array.isArray(ans[q.id]) ? ans[q.id].length : ans[q.id])).length;
+  return (
+    <div className="card pad stack">
+      <div className="row between">
+        <div><h3>2. Tasarımcının soruları</h3><div className="small muted">{answered}/{p.scan.questions.length} cevaplandı · cevaplar konseptlere doğrudan yansır</div></div>
+      </div>
+      {p.scan.text && <div className="note-box"><Icon name="eye" /><div><b>Eskizde gördüklerim:</b> {p.scan.text}</div></div>}
+      {p.scan.questions.map((q) => (
+        <div key={q.id} className="stack" style={{ gap: 6 }}>
+          <b style={{ fontSize: 13 }}>{q.soru}{q.coklu && <span className="small muted"> (birden fazla seçilebilir)</span>}</b>
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {q.secenekler.map((o) => <button key={o} className={`chip ${isOn(q, o) ? 'on' : ''}`} onClick={() => pick(q, o)}>{isOn(q, o) && <Icon name="check" size={12} />}{o}</button>)}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------- sembol / ikon yolu ----------------
+
+const ICON_MODES = [
+  ['tasarla', 'sparkles', 'İkonu tasarla', 'Tasarımcı sembolü sıfırdan çizer; eskiz yalnızca yol gösterir.'],
+  ['hazir', 'check', 'Eskizi hazır kullan', 'Eskizdeki ikon aynen korunur, temiz vektöre çevrilir; konseptler yazı ve renkte farklılaşır.'],
+];
+
+function IconMode({ c, p }) {
+  const [mode, setMode] = useState(p.iconMode || 'tasarla');
+  useEffect(() => setMode(p.iconMode || 'tasarla'), [p.id, p.iconMode]);
+  const set = (m) => { setMode(m); api.patch(base(c, p), { iconMode: m }).catch(toastErr); };
+  return (
+    <div className="card pad stack">
+      <h3>3. Sembol / ikon</h3>
+      <div className="type-cards">
+        {ICON_MODES.map(([k, ic, t, d]) => (
+          <button key={k} className={`type-card ${mode === k ? 'on' : ''}`} disabled={k === 'hazir' && !p.sketches.length} title={k === 'hazir' && !p.sketches.length ? 'Önce eskiz ya da hazır ikon yükle' : ''} onClick={() => set(k)}>
+            <Icon name={ic} className="ic" /><div><b>{t}</b><span>{d}</span></div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- renk paleti ----------------
+
+const PALETTES = [
+  ['Gece mavisi', ['#0B1F3A', '#1E4FD8', '#8FB3FF', '#F4F6FA']],
+  ['Holografik', ['#7F5AF0', '#2CB1BC', '#FF8BD1', '#F9F871']],
+  ['Lüks altın', ['#111111', '#C9A227', '#E8D9A8', '#FAFAF7']],
+  ['Toprak', ['#3E2C23', '#A0522D', '#D9A066', '#F3E9DC']],
+  ['Orman', ['#0F3D2E', '#2E7D32', '#A5D6A7', '#F1F8E9']],
+  ['Mercan', ['#1D1D1F', '#FF6B5B', '#FFC2B4', '#FFF5F0']],
+  ['Neon', ['#0D0D0D', '#39FF14', '#FF2FD6', '#00E5FF']],
+  ['Pastel', ['#6C63FF', '#FFB5C2', '#B5EAD7', '#FFF1C1']],
+  ['Monokrom', ['#111111', '#555555', '#BDBDBD', '#FFFFFF']],
+];
+
+const same = (a, b) => a.length === b.length && a.every((x, i) => x.toUpperCase() === b[i].toUpperCase());
+
+function PalettePicker({ c, p, reload }) {
+  const [colors, setColors] = useState(p.colors || []);
+  useEffect(() => setColors(p.colors || []), [p.id, (p.colors || []).join()]);
+  const save = (next) => { setColors(next); api.patch(base(c, p), { colors: next }).then(reload).catch(toastErr); };
+  const brand = c.palette.map((x) => x.hex).slice(0, 6);
+  const options = [...(brand.length ? [['Marka paleti', brand]] : []), ...PALETTES];
+  const Sw = ({ list }) => <div className="row" style={{ gap: 0 }}>{list.map((h, i) => <span key={i} style={{ width: 22, height: 22, background: h, borderRadius: i === 0 ? '6px 0 0 6px' : i === list.length - 1 ? '0 6px 6px 0' : 0, border: '1px solid var(--line)' }} />)}</div>;
+  return (
+    <div className="card pad stack">
+      <div className="row between">
+        <div><h3>4. Renk paleti</h3><div className="small muted">Hazır bir palet seç ya da renkleri kendin belirle. Boş bırakırsan tasarımcı markaya uygun renk seçer.</div></div>
+        {colors.length > 0 && <button className="btn sm ghost" onClick={() => save([])}><Icon name="x" />Serbest bırak</button>}
+      </div>
+      <div className="type-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+        {options.map(([name, list]) => (
+          <button key={name} className={`type-card ${same(colors, list) ? 'on' : ''}`} style={{ flexDirection: 'column', gap: 8 }} onClick={() => save(list)}>
+            <Sw list={list} /><b>{name}</b>
+          </button>
+        ))}
+      </div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <span className="small muted">Seçili:</span>
+        {colors.map((h, i) => (
+          <span key={i} className="chip" style={{ paddingLeft: 4 }}>
+            <input type="color" value={h.length === 7 ? h : '#000000'} onChange={(e) => setColors(colors.map((x, j) => (j === i ? e.target.value.toUpperCase() : x)))} onBlur={() => save(colors)} style={{ display: 'inline-block', width: 22, height: 22, border: 'none', padding: 0, background: 'none' }} />
+            <span className="mono">{h}</span>
+            <button className="btn sm ghost icon" style={{ padding: 0, height: 18 }} onClick={() => save(colors.filter((_, j) => j !== i))}><Icon name="x" size={12} /></button>
+          </span>
+        ))}
+        {colors.length < 6 && <button className="btn sm" onClick={() => save([...colors, '#888888'])}><Icon name="plus" />Renk ekle</button>}
+        {!colors.length && <span className="small muted">serbest</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------- ilham alınacak örnek logolar ----------------
+
+function RefLogos({ c, p, reload }) {
+  const refs = p.refs || [];
+  return (
+    <div className="card pad stack">
+      <div className="row between">
+        <div><h3>5. Örnek logolar (ilham)</h3><div className="small muted">Beğendiğin logoları yükle; tasarımcı stilini, çizgi ve harf karakterini yakalar ama kopyalamaz. Son 4 tanesi kullanılır.</div></div>
+        <FilePick className="btn sm" accept="image/*" multiple onFiles={async (files) => {
+          try { for (const f of files) await api.post(`${base(c, p)}/refs`, { dataUrl: await readAsDataUrl(f), name: f.name }); reload(); } catch (e) { toastErr(e); }
+        }}><Icon name="upload" />Örnek logo yükle</FilePick>
+      </div>
+      {refs.length ? (
+        <div className="img-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+          {refs.map((s) => (
+            <div key={s.id} className="img-card">
+              <div className="th contain" style={{ background: '#fff' }}><img src={`/files/${c.id}/${s.file}`} alt="" /></div>
+              <button className="btn sm ghost danger" style={{ position: 'absolute', top: 4, right: 4, background: 'var(--surface)' }} onClick={async () => { await api.del(`${base(c, p)}/refs/${s.id}`); reload(); }}><Icon name="x" size={13} /></button>
+            </div>
+          ))}
+        </div>
+      ) : <p className="small muted" style={{ margin: 0 }}>İsteğe bağlı. Örnek yüklemezsen tasarımcı eskiz, cevaplar ve markadan yola çıkar.</p>}
+    </div>
+  );
+}
+
 // ---------------- konseptler ----------------
 
 function Concepts({ c, p, reload }) {
@@ -191,7 +334,7 @@ function Concepts({ c, p, reload }) {
   return (
     <div className="card pad stack">
       <div className="row between">
-        <h3>Konseptler</h3>
+        <h3>6. Konseptler</h3>
         <div className="row">
           <input className="input" style={{ width: 280 }} placeholder="Bu tur için yön (isteğe bağlı)" value={direction} onChange={(e) => setDirection(e.target.value)} />
           <select className="select" style={{ width: 90 }} value={count} onChange={(e) => setCount(+e.target.value)}>{[2, 3, 4, 6].map((n) => <option key={n} value={n}>{n} adet</option>)}</select>

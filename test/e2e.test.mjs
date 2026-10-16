@@ -74,8 +74,19 @@ test('logo stüdyosu: eskiz, konsept, final set, ikonlar, vektör ve PNG paketi'
   const p = await api('POST', `/api/companies/${c.id}/logo-projects`, { name: 'Logo' });
   const white = 'data:image/png;base64,' + (await sharp({ create: { width: 64, height: 64, channels: 3, background: '#ffffff' } }).png().toBuffer()).toString('base64');
   await api('POST', `/api/companies/${c.id}/logo-projects/${p.id}/sketches`, { dataUrl: white });
-  await api('POST', `/api/companies/${c.id}/logo-projects/${p.id}/concepts`, { count: 4 });
   const proj = async () => (await api('GET', `/api/companies/${c.id}`)).logoProjects.find((x) => x.id === p.id);
+  // Eskiz taraması: 2-3 soru, cevaplar, örnek logo, hazır ikon ve palet seçimi
+  await api('POST', `/api/companies/${c.id}/logo-projects/${p.id}/refs`, { dataUrl: white, name: 'ornek.png' });
+  await api('POST', `/api/companies/${c.id}/logo-projects/${p.id}/scan`);
+  const scanned = await until(async () => { const x = await proj(); return !x.busy && x.scan && x; });
+  assert.equal(scanned.scan.questions.length, 2);
+  assert.equal(scanned.scan.questions[0].secenekler[1], 'Holografik');
+  assert.equal(scanned.refs.length, 1);
+  await api('PATCH', `/api/companies/${c.id}/logo-projects/${p.id}`, { answers: { stil: 'Holografik' }, iconMode: 'hazir', colors: ['#7F5AF0', '#2CB1BC'] });
+  const saved = await proj();
+  assert.equal(saved.answers.stil, 'Holografik');
+  assert.equal(saved.iconMode, 'hazir');
+  await api('POST', `/api/companies/${c.id}/logo-projects/${p.id}/concepts`, { count: 4 });
   const withConcepts = await until(async () => { const x = await proj(); return !x.busy && x.concepts.length && x; });
   assert.equal(withConcepts.concepts[1].title, 'Deneme 2');
   await api('POST', `/api/companies/${c.id}/logo-projects/${p.id}/finalize`, { conceptId: withConcepts.concepts[0].id });

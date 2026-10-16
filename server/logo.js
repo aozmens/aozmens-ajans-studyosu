@@ -8,7 +8,7 @@ import * as claude from './claude.js';
 import * as render from './render.js';
 import { send } from './events.js';
 import { slug as exportSlug } from './export.js';
-import { systemFor, companyBrief, extractSvg } from './orchestrator.js';
+import { systemFor, companyBrief, extractSvg, extractJson } from './orchestrator.js';
 
 const settings = () => store.getSettings(false);
 
@@ -30,7 +30,7 @@ export function createProject(cid, input = {}) {
   const p = {
     id: store.id(), name: input.name || `${c.name} logo`, brief: input.brief || '', style: input.style || '', keywords: input.keywords || '',
     colors: input.colors || c.palette.map((x) => x.hex).slice(0, 4), logoType: input.logoType || 'kombine',
-    sketches: [], concepts: [], selectedId: null, final: null, icons: [], busy: false, error: null, createdAt: store.now(),
+    sketches: [], refs: [], scan: null, answers: {}, iconMode: 'tasarla', concepts: [], selectedId: null, final: null, icons: [], busy: false, error: null, createdAt: store.now(),
   };
   c.logoProjects.unshift(p);
   changed(c);
@@ -39,33 +39,36 @@ export function createProject(cid, input = {}) {
 
 export function updateProject(cid, pid, patch) {
   const { c, p } = getProject(cid, pid);
-  for (const k of ['name', 'brief', 'style', 'keywords', 'colors', 'logoType', 'selectedId']) if (patch[k] !== undefined) p[k] = patch[k];
+  for (const k of ['name', 'brief', 'style', 'keywords', 'colors', 'logoType', 'selectedId', 'answers', 'iconMode']) if (patch[k] !== undefined) p[k] = patch[k];
   changed(c);
   return p;
 }
 
 export function deleteProject(cid, pid) {
   const { c, p } = getProject(cid, pid);
-  for (const s of p.sketches) fs.rmSync(store.assetPath(c.id, s.file), { force: true });
+  for (const s of [...p.sketches, ...(p.refs || [])]) fs.rmSync(store.assetPath(c.id, s.file), { force: true });
   c.logoProjects = c.logoProjects.filter((x) => x.id !== pid);
   changed(c);
 }
 
-export async function addSketch(cid, pid, dataUrl, name = 'Eskiz') {
+// kind: 'sketches' (kullanıcının eskizi) ya da 'refs' (ilham alınacak örnek logolar)
+export async function addSketch(cid, pid, dataUrl, name = 'Eskiz', kind = 'sketches') {
   const { c, p } = getProject(cid, pid);
   const { buf } = store.parseDataUrl(dataUrl);
   const prepared = await sharp(buf).rotate().resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).png().toBuffer();
   const e = store.writeAsset(c.id, { name, buf: prepared, mime: 'image/png' });
-  p.sketches.push({ id: e.id, file: e.file, name, at: store.now() });
+  p[kind].push({ id: e.id, file: e.file, name, at: store.now() });
+  // Yeni eskiz gelince eski tarama geçersiz
+  if (kind === 'sketches') p.scan = null;
   changed(c);
   return p;
 }
 
-export function removeSketch(cid, pid, sid) {
+export function removeSketch(cid, pid, sid, kind = 'sketches') {
   const { c, p } = getProject(cid, pid);
-  const s = p.sketches.find((x) => x.id === sid);
+  const s = p[kind].find((x) => x.id === sid);
   if (s) fs.rmSync(store.assetPath(c.id, s.file), { force: true });
-  p.sketches = p.sketches.filter((x) => x.id !== sid);
+  p[kind] = p[kind].filter((x) => x.id !== sid);
   changed(c);
 }
 
@@ -94,12 +97,32 @@ function parseConcepts(text) {
   return out;
 }
 
-async function sketchBlocks(c, p) {
+async function sketchBlocks(c, p, { refs = true } = {}) {
   const out = [];
   for (const s of p.sketches.slice(-3)) {
     try { out.push({ type: 'text', text: `Kullanıcının eskizi: ${s.name}` }, await render.imageBlockFromFile(store.assetPath(c.id, s.file), 1200)); } catch {}
   }
+  if (refs) {
+    for (const s of (p.refs || []).slice(-4)) {
+      try { out.push({ type: 'text', text: `İlham alınacak örnek logo: ${s.name}` }, await render.imageBlockFromFile(store.assetPath(c.id, s.file), 800)); } catch {}
+    }
+  }
   return out;
+}
+
+const ICON_MODES = {
+  tasarla: 'Sembolü tasarımcı sıfırdan tasarlasın (eskiz varsa yalnızca yol gösterir).',
+  hazir: 'Eskizdeki sembol / ikon hazır: formunu birebir koru, yalnızca temiz vektöre çevir (çizgileri düzelt, simetriyi ve oranları netleştir). Konseptler tipografi, renk ve yerleşimde farklılaşsın; sembolün kendisini değiştirme.',
+};
+
+function answersText(p) {
+  const qs = p.scan?.questions || [];
+  const lines = qs.map((q) => {
+    const a = p.answers?.[q.id];
+    const v = Array.isArray(a) ? a.join(', ') : a;
+    return v ? `- ${q.soru} → ${v}` : null;
+  }).filter(Boolean);
+  return lines.length ? lines.join('\n') : '';
 }
 
 function briefText(c, p) {
@@ -110,7 +133,9 @@ function briefText(c, p) {
 - Logo türü: ${{ kombine: 'sembol + yazı (kombine)', sembol: 'yalnızca sembol / ikon', yazi: 'yalnızca yazı (logotype / wordmark)', monogram: 'monogram (baş harfler)', amblem: 'amblem (rozet içinde)' }[p.logoType] || p.logoType}
 - İstenen stil: ${p.style || '-'}
 - Anahtar kelimeler / çağrışımlar: ${p.keywords || '-'}
-- Renkler: ${(p.colors || []).join(', ') || 'serbest (markaya uygun)'}
+- Renkler: ${(p.colors || []).length ? `${p.colors.join(', ')} (kullanıcının seçtiği palet; bu renklerin dışına çıkma)` : 'serbest (markaya uygun)'}
+- Sembol / ikon: ${ICON_MODES[p.iconMode] || ICON_MODES.tasarla}
+${p.scan?.text ? `\n## Eskiz taraması (tasarımcının eskizde gördükleri)\n${p.scan.text}` : ''}${answersText(p) ? `\n## Kullanıcının tercihleri (sorulara verdiği cevaplar; bunlara mutlaka uy)\n${answersText(p)}` : ''}${(p.refs || []).length ? `\n## Örnek logolar\nKullanıcı ilham için ${p.refs.length} örnek logo yükledi (ekte). Bu logoların stilini, çizgi kalınlığını, geometri ve tipografi karakterini, renk kullanımını ve sadelik düzeyini yakala; ama hiçbirini kopyalama, sembolleri ve harf formlarını birebir alma.` : ''}
 ${p.brief ? `\n## Kullanıcının notları\n${p.brief}` : ''}`;
 }
 
@@ -130,6 +155,46 @@ async function withBusy(c, p, fn) {
   }
 }
 
+// Eskizi tarar: ne gördüğünü yazar ve tasarıma başlamadan önce 2-3 seçmeli soru sorar
+export async function scanSketch(cid, pid) {
+  const { c, p } = getProject(cid, pid);
+  if (!p.sketches.length && !(p.refs || []).length) throw new Error('Önce bir eskiz çizin ya da yükleyin.');
+  return withBusy(c, p, async () => {
+    const content = [...(await sketchBlocks(c, p))];
+    content.push({ type: 'text', text: `${briefText(c, p)}
+
+# Görevin: eskizi tara ve soru sor
+Logo tasarımına başlamadan önce ekteki eskizi${(p.refs || []).length ? ' ve örnek logoları' : ''} incele.
+1. "okuma": eskizde ne gördüğünü 2-4 cümleyle yaz: ana form, sembol fikri, yazı varsa ne yazdığı ve yerleşimi, oranlar, eskizin hazır bir ikon gibi mi yoksa kaba bir fikir gibi mi durduğu.${(p.refs || []).length ? ' Örnek logoların ortak stilini de bir cümleyle ekle.' : ''}
+2. "sorular": tasarımı en çok etkileyecek 2 ya da 3 seçmeli soru sor. İlk soru mutlaka görsel stil olsun (ör. Minimal, Holografik, Geometrik, El çizimi, Lüks / premium, Retro, 3B / gradyan, Neon). Diğerleri bu eskize özel olsun (ör. sembolün yorumu, yazı karakteri tarzı: serif / sans / el yazısı, köşe yapısı: keskin / yumuşak, çizgi mi dolgu mu). Her soruda 3-6 kısa seçenek (1-3 kelime), en olası olanı önce yaz. Renk sorma; palet ayrıca seçiliyor.
+
+Yalnızca şu JSON'u yaz:
+\`\`\`json
+{"okuma":"…","sorular":[{"id":"stil","soru":"Hangi stil?","secenekler":["Minimal","Holografik","…"],"coklu":false}]}
+\`\`\`` });
+    const r = await claude.call({
+      model: settings().designModel || settings().model,
+      system: systemFor('grafik-tasarimci', '\n\n## Bu görev\nBu görevde tasarım yapılmaz, SVG yazılmaz: yalnızca istenen JSON yazılır.'),
+      messages: [{ role: 'user', content }],
+      maxTokens: 4000,
+      tag: { companyId: cid, agent: 'grafik-tasarimci', kind: 'eskiz-tara' },
+    });
+    p.usage = claude.sumUsage(p.usage, r.usage);
+    const j = extractJson(r.text);
+    const questions = (Array.isArray(j.sorular) ? j.sorular : []).slice(0, 3).map((q, i) => ({
+      id: String(q.id || `s${i + 1}`).replace(/[^\w-]/g, '') || `s${i + 1}`,
+      soru: String(q.soru || '').trim(),
+      secenekler: (Array.isArray(q.secenekler) ? q.secenekler : []).map(String).filter(Boolean).slice(0, 8),
+      coklu: !!q.coklu,
+    })).filter((q) => q.soru && q.secenekler.length);
+    if (!questions.length) throw new Error('Tarama soru üretmedi, tekrar deneyin.');
+    p.scan = { text: String(j.okuma || '').trim(), questions, at: store.now() };
+    // Eski cevaplardan yalnızca hâlâ sorulanlar kalsın
+    p.answers = Object.fromEntries(Object.entries(p.answers || {}).filter(([k]) => questions.some((q) => q.id === k)));
+    return p;
+  });
+}
+
 export async function generateConcepts(cid, pid, { count = 4, direction = '' } = {}) {
   const { c, p } = getProject(cid, pid);
   return withBusy(c, p, async () => {
@@ -141,7 +206,7 @@ export async function generateConcepts(cid, pid, { count = 4, direction = '' } =
 
 ${prev ? `# Daha önce üretilen konseptler (bunları tekrarlama, yeni fikirler bul)\n${prev}\n` : ''}${direction ? `# Bu tur için yön\n${direction}\n` : ''}
 # Görevin
-${p.sketches.length ? 'Kullanıcının eskizindeki fikri temel al: eskizdeki ana formu, oranları ve yerleşimi profesyonel bir logoya dönüştür; konseptlerin en az yarısı eskize sadık kalsın, diğerleri eskizden yola çıkan cesur yorumlar olsun.' : 'Marka için'} ${count} farklı logo konsepti tasarla. Her konsept için şu biçimi kullan:
+${p.sketches.length ? (p.iconMode === 'hazir' ? 'Eskizdeki sembol hazır: her konseptte bu sembolü temiz vektör olarak aynen kullan; konseptleri yazı karakteri, renk ve yerleşimle farklılaştır.' : 'Kullanıcının eskizindeki fikri temel al: eskizdeki ana formu, oranları ve yerleşimi profesyonel bir logoya dönüştür; konseptlerin en az yarısı eskize sadık kalsın, diğerleri eskizden yola çıkan cesur yorumlar olsun.') : 'Marka için'} ${count} farklı logo konsepti tasarla. Her konsept için şu biçimi kullan:
 
 ### Konsept N: Kısa başlık
 Gerekçe: Fikri, sembolün anlamını ve tipografi seçimini 1-2 cümleyle anlat.

@@ -54,10 +54,14 @@ func showError(msg string) {
 	windows.MessageBox(0, m, t, windows.MB_OK|windows.MB_ICONERROR)
 }
 
-// İlk açılışta Masaüstü ve Başlat menüsüne Agent-cy kısayolu (silinirse yeniden oluşturulmaz)
+// Masaüstü ve Başlat menüsüne Agent-cy kısayolu. Program başka klasöre çıkarılırsa (yeni sürüm) kısayollar
+// yeni exe'yi gösterecek şekilde güncellenir; aynı klasörde kullanıcının sildiği kısayol yeniden oluşturulmaz.
 func ensureShortcuts(exe, dataDir string) {
 	flag := filepath.Join(dataDir, ".kisayol")
-	if _, err := os.Stat(flag); err == nil {
+	if b, err := os.ReadFile(flag); err == nil && (string(b) == exe || string(b) == "1") {
+		if string(b) == "1" {
+			_ = os.WriteFile(flag, []byte(exe), 0o644)
+		}
 		return
 	}
 	q := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
@@ -68,6 +72,6 @@ func ensureShortcuts(exe, dataDir string) {
 	c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps)
 	hideWindow(c)
 	if c.Run() == nil {
-		_ = os.WriteFile(flag, []byte("1"), 0o644)
+		_ = os.WriteFile(flag, []byte(exe), 0o644)
 	}
 }

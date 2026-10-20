@@ -1,6 +1,7 @@
-// Agent-cy masaüstü başlatıcısı (Windows). Paketteki taşınabilir Node ile sunucuyu yalnızca bu bilgisayarda
-// (127.0.0.1) başlatır, boş bir port seçer ve tarayıcıyı açar. Veriler Belgeler\Agent-cy klasöründe durur.
-// Program zaten açıksa yenisini başlatmaz, açık olanı tarayıcıda gösterir.
+// Agent-cy masaüstü başlatıcısı. Paketteki taşınabilir Node ile sunucuyu yalnızca bu bilgisayarda (127.0.0.1)
+// arka planda başlatır ve Agent-cy'yi kendi uygulama penceresinde açar (Edge/Chrome uygulama modu; adres çubuğu yok).
+// Pencere kapanınca sunucu da kapanır. Veriler Belgeler\Agent-cy klasöründe durur.
+// Program zaten açıksa yenisini başlatmaz, açık olanın penceresini getirir.
 package main
 
 import (
@@ -12,7 +13,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,46 +23,40 @@ func main() {
 	exe, _ := os.Executable()
 	base := filepath.Dir(exe)
 	appDir := filepath.Join(base, "app")
-	node := filepath.Join(base, "runtime", "node.exe")
-	if runtime.GOOS != "windows" {
-		node = filepath.Join(base, "runtime", "node")
-	}
+	node := filepath.Join(base, "runtime", nodeExe)
 
 	dataDir := os.Getenv("AGENT_CY_DATA")
 	if dataDir == "" {
-		home, _ := os.UserHomeDir()
-		dataDir = filepath.Join(home, "Documents", "Agent-cy")
+		dataDir = filepath.Join(documentsDir(), "Agent-cy")
 	}
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		fail("Veri klasörü oluşturulamadı: " + dataDir + "\n" + err.Error())
+		fail("Veri klasörü oluşturulamadı:\n" + dataDir + "\n\n" + err.Error())
 	}
 
-	fmt.Println("Agent-cy")
-	fmt.Println("Veri klasörü:", dataDir)
-
-	// Açık bir Agent-cy varsa onu göster
+	// Açık bir Agent-cy varsa yalnızca penceresini aç
 	portFile := filepath.Join(dataDir, ".port")
 	if b, err := os.ReadFile(portFile); err == nil {
 		if p, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && alive(p) {
-			url := fmt.Sprintf("http://127.0.0.1:%d", p)
-			fmt.Println("Agent-cy zaten açık:", url)
-			openBrowser(url)
-			time.Sleep(2 * time.Second)
+			openWindow(fmt.Sprintf("http://127.0.0.1:%d", p), dataDir)
 			return
 		}
 	}
 
 	if _, err := os.Stat(node); err != nil {
-		fail("Node bulunamadı: " + node + "\nZip'in tamamını aynı klasöre çıkardığından emin ol.")
+		fail("Node bulunamadı:\n" + node + "\n\nZip'in tamamını aynı klasöre çıkardığından emin ol.")
 	}
+	ensureShortcuts(exe, dataDir)
+
 	port := freePort()
 	url := fmt.Sprintf("http://127.0.0.1:%d", port)
-
-	logf, _ := os.OpenFile(filepath.Join(dataDir, "agent-cy.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	logPath := filepath.Join(dataDir, "agent-cy.log")
 	var out io.Writer = os.Stdout
-	if logf != nil {
-		out = io.MultiWriter(os.Stdout, logf)
+	if logf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
 		defer logf.Close()
+		out = logf
+		if consoleAttached() {
+			out = io.MultiWriter(os.Stdout, logf)
+		}
 	}
 
 	cmd := exec.Command(node, filepath.Join(appDir, "server", "index.js"))
@@ -76,13 +70,12 @@ func main() {
 		"HOST=127.0.0.1",
 		"AJANS_DESKTOP=1",
 	)
+	hideWindow(cmd)
 	if err := cmd.Start(); err != nil {
-		fail("Sunucu başlatılamadı: " + err.Error())
+		fail("Agent-cy başlatılamadı: " + err.Error())
 	}
 	_ = os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0o644)
-	defer os.Remove(portFile)
 
-	// Ctrl+C ya da pencere kapanınca sunucuyu da kapat
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() { <-sig; _ = cmd.Process.Kill() }()
@@ -90,21 +83,21 @@ func main() {
 	go func() {
 		for i := 0; i < 120; i++ {
 			if alive(port) {
-				fmt.Println()
-				fmt.Println("Hazır:", url)
-				fmt.Println("Bu pencereyi kapatınca Agent-cy de kapanır.")
-				openBrowser(url)
+				fmt.Fprintln(out, "Hazır:", url)
+				openWindow(url, dataDir)
 				return
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
-		fmt.Println("Sunucu 60 saniyede açılmadı; ayrıntı agent-cy.log dosyasında.")
+		_ = cmd.Process.Kill()
+		fail("Agent-cy 60 saniyede açılmadı.\nAyrıntı: " + logPath)
 	}()
 
+	// Sunucu, uygulama penceresi kapanınca kendiliğinden kapanır
 	err := cmd.Wait()
 	os.Remove(portFile)
-	if err != nil {
-		fail("Agent-cy kapandı: " + err.Error() + "\nAyrıntı: " + filepath.Join(dataDir, "agent-cy.log"))
+	if err != nil && !strings.Contains(err.Error(), "killed") {
+		fail("Agent-cy beklenmedik biçimde kapandı.\nAyrıntı: " + logPath)
 	}
 }
 
@@ -134,21 +127,22 @@ func freePort() int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
-func openBrowser(url string) {
-	switch runtime.GOOS {
-	case "windows":
-		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		_ = exec.Command("open", url).Start()
-	default:
-		_ = exec.Command("xdg-open", url).Start()
+// Edge ya da Chrome varsa ayrı profil ve uygulama modunda (kendi penceresi, kendi görev çubuğu simgesi) açar
+func openWindow(url, dataDir string) {
+	if b := appBrowser(); b != "" {
+		profile := filepath.Join(dataDir, ".pencere")
+		c := exec.Command(b, "--app="+url, "--user-data-dir="+profile, "--no-first-run", "--no-default-browser-check",
+			"--disable-features=msEdgeStartupBoost,Translate", "--window-size=1440,920", "--lang=tr")
+		if c.Start() == nil {
+			go c.Wait()
+			return
+		}
 	}
+	openDefault(url)
 }
 
 func fail(msg string) {
-	fmt.Println()
-	fmt.Println("HATA:", msg)
-	fmt.Println("Kapatmak için Enter'a bas.")
-	fmt.Scanln()
+	fmt.Fprintln(os.Stderr, "HATA:", msg)
+	showError(msg)
 	os.Exit(1)
 }

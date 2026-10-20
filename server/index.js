@@ -665,3 +665,21 @@ if (fs.existsSync(DIST)) {
 }
 
 app.listen(PORT, HOST, () => console.log(`Agent-cy ${VERSION}${COMMIT ? ' (' + COMMIT + ')' : ''} → http://localhost:${PORT} · veri: ${DATA_DIR}`));
+
+// Bilgisayar sürümü: uygulama penceresi kapanınca (canlı bağlantı kalmayınca) sunucu da kapanır.
+// Yenileme sırasında bağlantı kısa süre kopar; 15 sn beklenir. Süren bir iş varsa bitene kadar açık kalır.
+if (DESKTOP) {
+  let seen = false;
+  let idleSince = 0;
+  setInterval(() => {
+    if (events.clientCount() > 0) { seen = true; idleSince = 0; return; }
+    if (!seen) return;
+    if (store.listJobs().some((j) => j.status === 'running')) return;
+    if (!idleSince) idleSince = Date.now();
+    if (Date.now() - idleSince > +(process.env.AJANS_IDLE_MS || 15000)) {
+      console.log('Pencere kapandı; Agent-cy kapanıyor.');
+      store.flush();
+      process.exit(0);
+    }
+  }, 2000).unref();
+}

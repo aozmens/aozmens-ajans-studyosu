@@ -47,9 +47,9 @@ step('Agent-cy.exe derleniyor');
 const launcher = path.join(ROOT, 'desktop/launcher');
 const env = { ...process.env, GOOS: 'windows', GOARCH: 'amd64', CGO_ENABLED: '0' };
 run(GO, ['run', 'github.com/tc-hib/go-winres@v0.3.3', 'simply', '--arch', 'amd64', '--icon', path.join(ROOT, 'assets/marka/agent-cy-ikon.png'),
-  '--manifest', 'cli', '--product-name', 'Agent-cy', '--file-description', 'Agent-cy', '--product-version', version, '--file-version', version,
+  '--manifest', 'gui', '--product-name', 'Agent-cy', '--file-description', 'Agent-cy', '--product-version', version, '--file-version', version,
   '--copyright', `© ${new Date().getFullYear()} Agent-cy`, '--original-filename', 'Agent-cy.exe'], { cwd: launcher, env: { ...process.env } });
-run(GO, ['build', '-trimpath', '-ldflags', '-s -w', '-o', path.join(PKG, 'Agent-cy.exe'), '.'], { cwd: launcher, env });
+run(GO, ['build', '-trimpath', '-ldflags', '-s -w -H=windowsgui', '-o', path.join(PKG, 'Agent-cy.exe'), '.'], { cwd: launcher, env });
 for (const f of fs.readdirSync(launcher)) if (f.endsWith('.syso')) fs.rmSync(path.join(launcher, f));
 
 fs.writeFileSync(path.join(PKG, 'OKUBENI.txt'), `Agent-cy ${version} · Windows
@@ -63,9 +63,11 @@ KURULUM
 Windows "bilinmeyen yayımcı" uyarısı verirse: "Ek bilgi" → "Yine de çalıştır".
 
 KULLANIM
-- Program yalnızca bu bilgisayarda çalışır (http://127.0.0.1). Kapatmak için siyah pencereyi kapat.
-- Agent-cy.exe'ye yeniden tıklarsan açık olan program tarayıcıda tekrar gösterilir.
-- Masaüstüne kısayol için: Agent-cy.exe'ye sağ tıkla → Gönder → Masaüstü (kısayol oluştur).
+- Agent-cy kendi uygulama penceresinde açılır (adres çubuğu yok; Microsoft Edge'in uygulama modu, Windows 10/11'de hazır gelir).
+- İlk açılışta Masaüstü'ne ve Başlat menüsüne "Agent-cy" kısayolu eklenir; görev çubuğuna sabitleyebilirsin.
+- Program yalnızca bu bilgisayarda çalışır (http://127.0.0.1), internete açılmaz. Pencereyi kapatınca Agent-cy de kapanır
+  (süren bir iş varsa iş bitince kapanır).
+- Agent-cy zaten açıkken yeniden tıklarsan yeni bir pencere açılır.
 
 VERİLER
 - Bütün veriler: Belgeler\\Agent-cy
@@ -81,7 +83,7 @@ WEB KLON (CLAUDE CODE)
   https://claude.com/claude-code  (kurulduktan sonra Agent-cy'yi yeniden aç)
 
 İÇERİK
-- Agent-cy.exe   başlatıcı
+- Agent-cy.exe   başlatıcı (uygulama)
 - runtime\\       taşınabilir Node.js ${NODE_VERSION}
 - app\\           Agent-cy uygulaması
 

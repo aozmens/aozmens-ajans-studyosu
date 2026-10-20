@@ -28,7 +28,8 @@ const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const PORT = +process.env.PORT || 3000;
 const HOST = process.env.HOST || undefined; // masaüstü sürümü yalnızca 127.0.0.1'de dinler
 const DESKTOP = process.env.AJANS_DESKTOP === '1';
-const PASSWORD = process.env.APP_PASSWORD || '';
+// Bilgisayar sürümü yalnızca bu bilgisayarda (127.0.0.1) dinler; şifre sorulmaz
+const PASSWORD = process.env.AJANS_DESKTOP === '1' ? '' : process.env.APP_PASSWORD || '';
 const SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256').update('ajans:' + PASSWORD + ':' + DATA_DIR).digest('hex');
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 const COMMIT = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT || '').slice(0, 7);

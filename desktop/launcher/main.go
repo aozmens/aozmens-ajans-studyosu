@@ -69,6 +69,7 @@ func main() {
 		"PORT="+strconv.Itoa(port),
 		"HOST=127.0.0.1",
 		"AJANS_DESKTOP=1",
+		"APP_PASSWORD=",
 	)
 	hideWindow(cmd)
 	if err := cmd.Start(); err != nil {
@@ -132,7 +133,7 @@ func openWindow(url, dataDir string) {
 	if b := appBrowser(); b != "" {
 		profile := filepath.Join(dataDir, ".pencere")
 		c := exec.Command(b, "--app="+url, "--user-data-dir="+profile, "--no-first-run", "--no-default-browser-check",
-			"--disable-features=msEdgeStartupBoost,Translate", "--window-size=1440,920", "--lang=tr")
+			"--disable-sync", "--disable-features=msEdgeStartupBoost,Translate,msImplicitSignin,msEdgeSyncConsent", "--window-size=1440,920", "--lang=tr")
 		if c.Start() == nil {
 			go c.Wait()
 			return

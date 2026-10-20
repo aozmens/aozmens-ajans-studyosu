@@ -206,6 +206,14 @@ export function getSettings(masked = false) {
   return s;
 }
 
+// OpenAI anahtarı "sk-" ile başlar (sk-proj-…, sk-svcacct-…); başka bir servisin anahtarı girildiyse açıkça söyle
+export function openaiKeyProblem(key) {
+  const k = String(key || '').trim();
+  if (!k || /^sk-[A-Za-z0-9_-]{20,}$/.test(k)) return '';
+  const hint = /^key_/.test(k) ? ' Girdiğin "key_…" ile başlayan anahtar başka bir servise ait.' : '';
+  return `Bu bir OpenAI API anahtarı değil.${hint} OpenAI anahtarı "sk-" ile başlar (ör. sk-proj-…). platform.openai.com/api-keys → "Create new secret key" ile oluşturup Ayarlar → Entegrasyonlar → OpenAI → API anahtarı alanına yapıştır.`;
+}
+
 export function saveSettings(input) {
   const next = mergeSettings(DEFAULT_SETTINGS, { ...db.settings, ...input, integrations: { ...db.settings.integrations } });
   for (const k of Object.keys(input.integrations || {})) next.integrations[k] = { ...db.settings.integrations[k], ...input.integrations[k] };
@@ -215,6 +223,12 @@ export function saveSettings(input) {
     delete getPath(next, p.slice(0, -1))?.[p[p.length - 1] + 'FromEnv'];
   }
   delete next.ready;
+  for (const p of SECRET_PATHS) setPath(next, p, String(getPath(next, p) || '').trim());
+  const oa = next.integrations.openai.apiKey;
+  if (oa && oa !== db.settings.integrations.openai?.apiKey) {
+    const problem = openaiKeyProblem(oa);
+    if (problem) throw Object.assign(new Error(problem), { status: 400 });
+  }
   next.concurrency = Math.max(1, Math.min(6, +next.concurrency || 3));
   next.designQa = Math.max(0, Math.min(2, +next.designQa || 0));
   db.settings = next;

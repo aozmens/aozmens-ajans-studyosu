@@ -11,7 +11,7 @@ const SECTIONS = [['claude', 'Claude', 'brain'], ['entegrasyonlar', 'Entegrasyon
 const PROV_FIELDS = {
   clipdrop: [['apiKey', 'API anahtarı', true]],
   fal: [['apiKey', 'API anahtarı (FAL_KEY)', true], ['model', 'Model', false, 'fal-ai/flux-pro/v1.1-ultra']],
-  openai: [['apiKey', 'API anahtarı', true], ['model', 'Model', false, 'gpt-image-2.5']],
+  openai: [['apiKey', 'API anahtarı', true, 'sk-proj-…'], ['model', 'Model', false, 'gpt-image-2.5']],
   gemini: [['apiKey', 'API anahtarı', true], ['model', 'Model', false, 'gemini-2.5-flash-image']],
   higgsfield: [['keyId', 'API Key ID', true], ['secret', 'API Key Secret', true], ['imageModel', 'Görsel modeli', false, 'higgsfield-ai/soul/v2/standard'], ['videoModel', 'Video modeli (görselden video)', false, 'ör. higgsfield-ai/dop/standard'], ['extra', 'Ek parametreler (JSON)', false, '{"resolution":"720p"}']],
 };

@@ -75,6 +75,8 @@ const impl = {
   async openai({ prompt, width, height, refs = [], signal }) {
     const c = cfg('openai');
     const model = c.model || 'gpt-image-2.5';
+    const bad = store.openaiKeyProblem(c.apiKey);
+    if (bad) throw new Error(bad);
     const ratio = width / height;
     const size = ratio > 1.15 ? '1536x1024' : ratio < 0.87 ? '1024x1536' : '1024x1024';
     const headers = { Authorization: `Bearer ${c.apiKey}` };
@@ -90,7 +92,10 @@ const impl = {
         body: JSON.stringify({ model, prompt, size, quality: 'high', n: 1 }), signal,
       });
     }
-    const r = await check(await req, 'OpenAI');
+    const res = await req;
+    if (res.status === 401) throw new Error('OpenAI anahtarı geçersiz ya da iptal edilmiş (HTTP 401). platform.openai.com/api-keys adresinden yeni bir anahtar oluşturup Ayarlar → Entegrasyonlar → OpenAI alanına yapıştır.');
+    if (res.status === 403) throw new Error(`OpenAI bu modele erişim vermiyor (HTTP 403). ${model} için kuruluş doğrulaması gerekebilir: platform.openai.com/settings/organization/general`);
+    const r = await check(res, 'OpenAI');
     const j = await r.json();
     return (j.data || []).map((d) => ({ buf: Buffer.from(d.b64_json, 'base64'), mime: 'image/png' }));
   },
@@ -189,6 +194,18 @@ export async function test(name) {
     // Ücretsiz kontrol yok; küçük bir istek gönderir
     await impl.clipdrop({ prompt: 'a single small red dot on white background' });
     return 'Bağlantı tamam';
+  }
+  if (name === 'openai') {
+    // Ücretsiz kontrol: anahtar biçimi + model listesi
+    const c = cfg('openai');
+    const bad = store.openaiKeyProblem(c.apiKey);
+    if (bad) throw new Error(bad);
+    const model = c.model || 'gpt-image-2.5';
+    const r = await fetch(`https://api.openai.com/v1/models/${encodeURIComponent(model)}`, { headers: { Authorization: `Bearer ${c.apiKey}` } });
+    if (r.status === 401) throw new Error('OpenAI anahtarı geçersiz ya da iptal edilmiş (HTTP 401). platform.openai.com/api-keys adresinden yeni anahtar oluştur.');
+    if (r.status === 404) throw new Error(`Anahtar çalışıyor ama ${model} bu hesapta görünmüyor. Ayarlar'daki model adını kontrol et.`);
+    await check(r, 'OpenAI');
+    return `Bağlantı tamam (${model})`;
   }
   await generate(name, { prompt: 'a minimal flat red circle on a white background', width: 1024, height: 1024 });
   return 'Bağlantı tamam (test görseli üretildi)';

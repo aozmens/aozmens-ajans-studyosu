@@ -165,6 +165,7 @@ app.get('/api/meta', h(() => ({
   folders: store.FOLDERS,
   desktop: DESKTOP,
   claudeCode: (({ available, version }) => ({ available, version }))(webclone.claudeCode()),
+  openaiModels: imagegen.OPENAI_MODELS,
   providers: Object.entries(imagegen.PROVIDERS).map(([id, p]) => ({ id, ...p, connected: imagegen.isConnected(id) })),
   agentGroups: agents.GROUPS,
   agentLabels: agents.LABELS,

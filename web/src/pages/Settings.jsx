@@ -11,14 +11,14 @@ const SECTIONS = [['claude', 'Claude', 'brain'], ['entegrasyonlar', 'Entegrasyon
 const PROV_FIELDS = {
   clipdrop: [['apiKey', 'API anahtarı', true]],
   fal: [['apiKey', 'API anahtarı (FAL_KEY)', true], ['model', 'Model', false, 'fal-ai/flux-pro/v1.1-ultra']],
-  openai: [['apiKey', 'API anahtarı', true, 'sk-proj-…'], ['model', 'Model', false, 'gpt-image-2.5']],
+  openai: [['apiKey', 'API anahtarı', true, 'sk-proj-…'], ['model', 'Model', false, 'gpt-image-2.5-flare']],
   gemini: [['apiKey', 'API anahtarı', true], ['model', 'Model', false, 'gemini-2.5-flash-image']],
   higgsfield: [['keyId', 'API Key ID', true], ['secret', 'API Key Secret', true], ['imageModel', 'Görsel modeli', false, 'higgsfield-ai/soul/v2/standard'], ['videoModel', 'Video modeli (görselden video)', false, 'ör. higgsfield-ai/dop/standard'], ['extra', 'Ek parametreler (JSON)', false, '{"resolution":"720p"}']],
 };
 const PROV_HELP = {
   clipdrop: 'clipdrop.co/apis → API key. Metinden görsel, arka plan silme ve büyütme.',
   fal: 'fal.ai/dashboard/keys. Flux Pro Ultra ile fotoğraf gerçekçiliğinde görseller.',
-  openai: 'platform.openai.com/api-keys. Varsayılan model gpt-image-2.5; ürün ve logo görselleri referans olarak gider.',
+  openai: 'platform.openai.com/api-keys. Varsayılan GPT Image 2.5 Flare; seçilen model hesapta yoksa sıradaki modele otomatik geçilir. Ürün ve logo görselleri referans olarak gider.',
   gemini: 'aistudio.google.com/apikey. Nano Banana; ilham görsellerini referans olarak da kullanır.',
   higgsfield: 'cloud.higgsfield.ai → API keys. Görsel ve görselden video (Reels).',
 };
@@ -95,7 +95,11 @@ export default function Settings({ section = 'claude' }) {
                     {PROV_FIELDS[p.id].map(([k, l, secret, ph]) => (
                       <div key={k} className="field">
                         <label>{l}</label>
-                        <input className="input mono" type={secret ? 'password' : 'text'} placeholder={ph} value={s.integrations[p.id]?.[k] || ''} onChange={(e) => setInt(p.id, { [k]: e.target.value })} />
+                        {p.id === 'openai' && k === 'model' && meta.openaiModels ? (
+                          <select className="select" value={s.integrations.openai?.model || meta.openaiModels[0][0]} onChange={(e) => setInt('openai', { model: e.target.value })}>
+                            {[...meta.openaiModels, ...(meta.openaiModels.some(([id]) => id === s.integrations.openai?.model) || !s.integrations.openai?.model ? [] : [[s.integrations.openai.model, s.integrations.openai.model]])].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                          </select>
+                        ) : <input className="input mono" type={secret ? 'password' : 'text'} placeholder={ph} value={s.integrations[p.id]?.[k] || ''} onChange={(e) => setInt(p.id, { [k]: e.target.value })} />}
                         {s.integrations[p.id]?.[k + 'FromEnv'] && <span className="hint">Ortam değişkeninden okunuyor.</span>}
                       </div>
                     ))}

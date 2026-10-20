@@ -840,7 +840,16 @@ async function designVariant(job, d, variant, company, signal) {
   variant.error = null;
   emit(job);
   try {
-    await ensureAiImage(job, d, variant, company, signal);
+    // AI görsel üretilemezse (anahtar, model, kota…) tasarım firma görselleriyle sürer; hata içerikte görünür,
+    // görsel sonradan "AI görseli yeniden üret" ya da "Kaldığı yerden devam" ile tamamlanabilir
+    try {
+      await ensureAiImage(job, d, variant, company, signal);
+      d.aiImageError = null;
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      d.aiImageError = e.message;
+      emit(job);
+    }
     const base = d.variants.find((v) => v !== variant && v.status === 'done' && v.frames.length === variant.frames.length);
     for (let i = 0; i < variant.frames.length; i++) {
       if (variant.frames[i].svg) continue;
@@ -976,6 +985,7 @@ export async function regenerateAiImage(jobId, designId, variantKey, prompt) {
   if (prompt) d.ai_gorsel_prompt = prompt;
   for (const x of d.variants) if (Math.abs(x.width / x.height - v.width / v.height) < 0.05) delete d.aiImages?.[x.key];
   await ensureAiImage({ ...job, options: { ...job.options, aiImages: true } }, d, v, company, undefined);
+  d.aiImageError = null;
   emit(job);
   store.flush();
   return d.aiImages[v.key];

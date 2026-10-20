@@ -129,6 +129,7 @@ export function DesignModal({ jobId, designId, onClose, onNav }) {
             <div className="card pad stack">
               <div className="row between"><h3>AI görsel</h3>{aiFile && <a className="btn sm" href={aiFile.url} target="_blank" rel="noreferrer"><Icon name="eye" />Görseli aç</a>}</div>
               {aiFile && <img src={aiFile.url} alt="" style={{ width: 120, borderRadius: 8 }} />}
+              {d.aiImageError && !aiFile && <div className="small" style={{ color: 'var(--danger, #d33)' }}>AI görsel üretilemedi, tasarım firma görselleriyle yapıldı: {d.aiImageError}</div>}
               <textarea className="textarea mono" style={{ minHeight: 90 }} value={aiPrompt ?? d.ai_gorsel_prompt ?? ''} onChange={(e) => setAiPrompt(e.target.value)} placeholder="İngilizce görsel promptu" />
               <div className="row">
                 {aiOn ? <AsyncButton className="btn" onClick={async () => { await api.post(`${D}/ai-image`, { variant: v.key, prompt: aiPrompt ?? d.ai_gorsel_prompt }); toast('Yeni AI görsel üretiliyor; bitince "Yeniden tasarla" ile tasarıma yerleştir.'); }}><Icon name="wand" />Görseli yeniden üret</AsyncButton> : <span className="small muted">Görsel motoru bağlı değil (Ayarlar → Entegrasyonlar).</span>}

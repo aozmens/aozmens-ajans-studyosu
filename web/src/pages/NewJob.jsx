@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useApp, go } from '../App.jsx';
 import { Icon, Modal, toastErr } from '../ui.jsx';
 import { InspirationPicker } from './Inspiration.jsx';
+import { MockupPicker } from './BrandKit.jsx';
 
 const PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'TikTok', 'X', 'YouTube'];
 const monthName = (offset = 1) => {
@@ -38,6 +39,9 @@ export default function NewJob({ initial, onClose }) {
   const [imageProvider, setImageProvider] = useState(settings.imageProvider || connected[0]?.id || '');
   const [tools, setTools] = useState([]);
   const [toolList, setToolList] = useState([]);
+  const [brandBook, setBrandBook] = useState(true);
+  const [bookMockups, setBookMockups] = useState(['hazir-kartvizit', 'hazir-uygulama', 'hazir-tabela']);
+  const [pickMock, setPickMock] = useState(false);
   const [busy, setBusy] = useState(false);
   const [agents, setAgents] = useState([]);
 
@@ -64,6 +68,7 @@ export default function NewJob({ initial, onClose }) {
         agents: selAgents, month: type === 'sosyal-medya-aylik' ? month : undefined, platforms, budget,
         makeDesigns, formats, postCount: +postCount, carouselCount: +carouselCount, slideCount: +slideCount,
         useBrandProfile, useInspiration, inspirationIds: useInspiration ? insp : [], aiImages: makeDesigns && aiImages && !!imageProvider, imageProvider, tools,
+        brandBook, brandBookMockups: bookMockups,
       };
       const { id } = await api.post('/api/jobs', { companyId, type, title: title.trim() || autoTitle, request, options });
       loadJobs();
@@ -182,6 +187,14 @@ export default function NewJob({ initial, onClose }) {
           </div>
         </div>
 
+        <div className="card pad stack">
+          <label className="check" style={{ fontWeight: 650 }}><input type="checkbox" checked={brandBook} onChange={(e) => setBrandBook(e.target.checked)} />Marka dosyası hazırla (PDF)</label>
+          <div className="row between">
+            <span className="small muted">{brandBook ? `Logo farklı zeminlerde, uygulama ikonu, yazı tipleri, renkler ve ${bookMockups.length} mockup; sonunda ajansın kurumsal alt bilgisi. Markanın "02 Marka Dosyası" klasörüne kaydedilir.` : 'Kapalı.'}{brandBook && company && !company.logoUrl ? ' Markanın logosu yok; dosya logosuz hazırlanır.' : ''}</span>
+            <button className="btn sm" disabled={!brandBook} onClick={() => setPickMock(true)}><Icon name="layers" />Mockup seç</button>
+          </div>
+        </div>
+
         {toolList.length > 0 && (
           <div className="field">
             <label>Prompt yazılacak dış araçlar <span className="faint" style={{ fontWeight: 400 }}>· her içerik için bu araçlara uygun prompt hazırlanır</span></label>
@@ -191,6 +204,11 @@ export default function NewJob({ initial, onClose }) {
           </div>
         )}
       </div>
+      {pickMock && (
+        <Modal size="wide" title="Marka dosyasındaki mockuplar" onClose={() => setPickMock(false)} footer={<button className="btn primary" onClick={() => setPickMock(false)}><Icon name="check" />Tamam ({bookMockups.length})</button>}>
+          <MockupPicker companyId={companyId} selected={bookMockups} onChange={setBookMockups} />
+        </Modal>
+      )}
       {pickInsp && (
         <Modal size="wide" title="İlham Al" onClose={() => setPickInsp(false)} footer={<button className="btn primary" onClick={() => setPickInsp(false)}><Icon name="check" />Tamam ({insp.length})</button>}>
           <InspirationPicker selected={insp} onChange={setInspirationIds} max={24} />

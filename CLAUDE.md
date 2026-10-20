@@ -1,4 +1,4 @@
-# Ajans Stüdyosu: çalışma notları
+# Agent-cy: çalışma notları
 
 - Arayüz ve bütün metinler Türkçe. Kullanıcı Alperen; açıklamalar sade Türkçe.
 - Sunucu: `server/` (Node 22, ESM, Express 4). Arayüz: `web/` (React 18 + Vite). `npm run build` arayüzü `web/dist`'e derler, sunucu onu sunar.

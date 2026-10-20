@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api, on, filesToItems } from '../api.js';
 import { go } from '../App.jsx';
 import { Icon, Modal, Empty, AsyncButton, FilePick, DropZone, Markdown, toast, toastErr, copy, confirmAsk } from '../ui.jsx';
+import { DesignLanguages, MockupLibrary } from './DesignLibrary.jsx';
 
 function useAgency() {
   const [a, setA] = useState(null);
@@ -83,9 +84,11 @@ export default function Inspiration() {
       </div>
       <div className="tabs">
         <button className={`tab ${tab === 'arsiv' ? 'on' : ''}`} onClick={() => setTab('arsiv')}><Icon name="sparkles" size={15} />Görseller ve promptlar<span className="cnt">{a.styles.length}</span></button>
+        <button className={`tab ${tab === 'dil' ? 'on' : ''}`} onClick={() => setTab('dil')}><Icon name="file" size={15} />Tasarım dili (PDF)<span className="cnt">{a.designLanguages.length || ''}</span></button>
+        <button className={`tab ${tab === 'mockup' ? 'on' : ''}`} onClick={() => setTab('mockup')}><Icon name="layers" size={15} />Mockuplar</button>
         <button className={`tab ${tab === 'rehber' ? 'on' : ''}`} onClick={() => setTab('rehber')}><Icon name="palette" size={15} />Ajansın görsel dili</button>
       </div>
-      {tab === 'arsiv' ? (
+      {tab === 'dil' ? <DesignLanguages a={a} load={load} /> : tab === 'mockup' ? <MockupLibrary /> : tab === 'arsiv' ? (
         <DropZone onFiles={upload}>
           <div className="stack">
             <div className="row">
@@ -155,7 +158,9 @@ function InspirationDetail({ s, onClose, load }) {
             <>
               <div className="field"><label className="row between">Prompt<button className="btn sm ghost" onClick={() => copy(an.prompt)}><Icon name="copy" /></button></label><textarea className="textarea mono" style={{ minHeight: 130 }} value={an.prompt || ''} onChange={(e) => setAn({ ...an, prompt: e.target.value })} /></div>
               <div className="field"><label className="row between">Stil eki (başka konulara eklenir)<button className="btn sm ghost" onClick={() => copy(an.styleSuffix)}><Icon name="copy" /></button></label><textarea className="textarea mono" style={{ minHeight: 60 }} value={an.styleSuffix || ''} onChange={(e) => setAn({ ...an, styleSuffix: e.target.value })} /></div>
+              <div className="field"><label className="row between">Ana ürün / kompozisyon {an.subjectPlacement ? `· ${an.subjectPlacement}` : ''}<button className="btn sm ghost" onClick={() => copy(an.subject)}><Icon name="copy" /></button></label><textarea className="textarea mono" style={{ minHeight: 70 }} value={an.subject || ''} onChange={(e) => setAn({ ...an, subject: e.target.value })} /></div>
               {F({ k: 'negative', label: 'Negatif prompt' })}
+              {(an.fonts || []).length > 0 && <div className="row">{an.fonts.map((f, i) => <span key={i} className="pill" title={f.stil}>{f.rol}: {f.tahmin} → <b style={{ fontFamily: `'${f.programFontu}'` }}>{f.programFontu}</b></span>)}</div>}
               <div className="grid-2">
                 {F({ k: 'medium', label: 'Tür' })}{F({ k: 'style', label: 'Stil' })}
                 {F({ k: 'lighting', label: 'Işık' })}{F({ k: 'composition', label: 'Kompozisyon' })}

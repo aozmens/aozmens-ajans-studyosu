@@ -56,7 +56,7 @@ export async function addSketch(cid, pid, dataUrl, name = 'Eskiz', kind = 'sketc
   const { c, p } = getProject(cid, pid);
   const { buf } = store.parseDataUrl(dataUrl);
   const prepared = await sharp(buf).rotate().resize({ width: 1400, height: 1400, fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).png().toBuffer();
-  const e = store.writeAsset(c.id, { name, buf: prepared, mime: 'image/png' });
+  const e = store.writeAsset(c.id, { name, buf: prepared, mime: 'image/png', folder: store.FOLDERS.logoStudio });
   p[kind].push({ id: e.id, file: e.file, name, at: store.now() });
   // Yeni eskiz gelince eski tarama geçersiz
   if (kind === 'sketches') p.scan = null;
@@ -483,10 +483,9 @@ export function useAsBrandLogo(cid, pid, variantId) {
   const { c, p } = getProject(cid, pid);
   if (!p.final) throw new Error('Önce logoyu tamamlayın.');
   const svg = outlineText(variantId ? (p.final.set.find((x) => x.id === variantId)?.svg || p.final.svg) : p.final.svg);
-  const entry = store.writeAsset(c.id, { name: `${p.name}.svg`, buf: Buffer.from(svg), mime: 'image/svg+xml' });
+  const entry = store.writeAsset(c.id, { name: `${p.name}.svg`, buf: Buffer.from(svg), mime: 'image/svg+xml', folder: store.FOLDERS.logos });
   const png = render.svgToPng(svg, 1200);
-  const pngFile = `${entry.id}-png.png`;
-  fs.writeFileSync(store.assetPath(c.id, pngFile), png);
+  const pngFile = store.writeSibling(c.id, entry.file, `${entry.id}-png.png`, png);
   entry.pngFile = pngFile;
   for (const l of c.logos) l.primary = false;
   entry.primary = true;

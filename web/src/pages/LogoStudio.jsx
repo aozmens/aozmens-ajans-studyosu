@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, readAsDataUrl, download } from '../api.js';
 import { Icon, Modal, Empty, AsyncButton, FilePick, UsageLine, toast, toastErr, confirmAsk } from '../ui.jsx';
+import { useApp } from '../App.jsx';
 
 const TYPES = [['kombine', 'Sembol + yazı'], ['sembol', 'Yalnızca sembol'], ['yazi', 'Yalnızca yazı'], ['monogram', 'Monogram'], ['amblem', 'Amblem / rozet']];
 
@@ -244,17 +245,6 @@ function IconMode({ c, p }) {
 
 // ---------------- renk paleti ----------------
 
-const PALETTES = [
-  ['Gece mavisi', ['#0B1F3A', '#1E4FD8', '#8FB3FF', '#F4F6FA']],
-  ['Holografik', ['#7F5AF0', '#2CB1BC', '#FF8BD1', '#F9F871']],
-  ['Lüks altın', ['#111111', '#C9A227', '#E8D9A8', '#FAFAF7']],
-  ['Toprak', ['#3E2C23', '#A0522D', '#D9A066', '#F3E9DC']],
-  ['Orman', ['#0F3D2E', '#2E7D32', '#A5D6A7', '#F1F8E9']],
-  ['Mercan', ['#1D1D1F', '#FF6B5B', '#FFC2B4', '#FFF5F0']],
-  ['Neon', ['#0D0D0D', '#39FF14', '#FF2FD6', '#00E5FF']],
-  ['Pastel', ['#6C63FF', '#FFB5C2', '#B5EAD7', '#FFF1C1']],
-  ['Monokrom', ['#111111', '#555555', '#BDBDBD', '#FFFFFF']],
-];
 
 const same = (a, b) => a.length === b.length && a.every((x, i) => x.toUpperCase() === b[i].toUpperCase());
 
@@ -263,7 +253,8 @@ function PalettePicker({ c, p, reload }) {
   useEffect(() => setColors(p.colors || []), [p.id, (p.colors || []).join()]);
   const save = (next) => { setColors(next); api.patch(base(c, p), { colors: next }).then(reload).catch(toastErr); };
   const brand = c.palette.map((x) => x.hex).slice(0, 6);
-  const options = [...(brand.length ? [['Marka paleti', brand]] : []), ...PALETTES];
+  const { meta } = useApp();
+  const options = [...(brand.length ? [['Marka paleti', brand]] : []), ...meta.palettes];
   const Sw = ({ list }) => <div className="row" style={{ gap: 0 }}>{list.map((h, i) => <span key={i} style={{ width: 22, height: 22, background: h, borderRadius: i === 0 ? '6px 0 0 6px' : i === list.length - 1 ? '0 6px 6px 0' : 0, border: '1px solid var(--line)' }} />)}</div>;
   return (
     <div className="card pad stack">

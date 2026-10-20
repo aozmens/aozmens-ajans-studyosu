@@ -9,6 +9,7 @@ import {
 import LogoStudio from './LogoStudio.jsx';
 import { DesignCard, DesignModal } from './DesignModal.jsx';
 import { InspirationPicker } from './Inspiration.jsx';
+import { FontsCard, Kartela, ChoiceLink, ClientChoiceCard, BrandBookTab, FolderTab, WebCloneTab } from './BrandKit.jsx';
 
 const TABS = [
   ['genel', 'Genel bakış', 'home'],
@@ -16,7 +17,10 @@ const TABS = [
   ['ilham', 'İlham', 'sparkles'],
   ['logo', 'Logo Stüdyosu', 'pen'],
   ['stil', 'Tasarım stili', 'palette'],
+  ['kilavuz', 'Marka dosyası', 'book'],
   ['dosyalar', 'Dosyalar', 'file'],
+  ['klasor', 'Klasör', 'folder'],
+  ['webklon', 'Web klon', 'code'],
   ['tasarimlar', 'Tasarımlar', 'image'],
   ['isler', 'İşler', 'layers'],
   ['hafiza', 'Hafıza', 'book'],
@@ -36,7 +40,7 @@ export default function Brand({ id, tab }) {
   if (!c) return <div className="page"><div className="spinner" /></div>;
   const color = brandColor(c);
   const cj = jobs.filter((j) => j.companyId === c.id);
-  const counts = { tasarimlar: c.designCount, isler: cj.length, dosyalar: c.files.length, hafiza: c.memory.length, ilham: c.inspirationIds.length, logo: c.logoProjects.length, stil: c.styles.length };
+  const counts = { kilavuz: c.brandBooks.length, webklon: c.webClones.length, tasarimlar: c.designCount, isler: cj.length, dosyalar: c.files.length, hafiza: c.memory.length, ilham: c.inspirationIds.length, logo: c.logoProjects.length, stil: c.styles.length };
   const setTab = (t) => go(`marka/${c.id}/${t}`);
 
   const learnBrand = async () => {
@@ -88,7 +92,10 @@ export default function Brand({ id, tab }) {
       {tab === 'ilham' && <BrandInspiration c={c} reload={load} open={() => setInspOpen(true)} />}
       {tab === 'logo' && <LogoStudio c={c} reload={load} />}
       {tab === 'stil' && <StyleTab c={c} reload={load} />}
+      {tab === 'kilavuz' && <BrandBookTab c={c} reload={load} />}
       {tab === 'dosyalar' && <Files c={c} reload={load} />}
+      {tab === 'klasor' && <FolderTab c={c} />}
+      {tab === 'webklon' && <WebCloneTab c={c} reload={load} />}
       {tab === 'tasarimlar' && <Designs c={c} />}
       {tab === 'isler' && <Jobs c={c} jobs={cj} />}
       {tab === 'hafiza' && <Memory c={c} reload={load} />}
@@ -119,6 +126,7 @@ function Overview({ c, reload, jobs, setTab, learnBrand }) {
   ];
   return (
     <div className="stack" style={{ gap: 18 }}>
+      <ClientChoiceCard c={c} reload={reload} />
       {steps.some(([d]) => !d) && (
         <div className="card pad">
           <h3 style={{ marginBottom: 10 }}>Markayı hazırlayalım</h3>
@@ -170,6 +178,8 @@ function Overview({ c, reload, jobs, setTab, learnBrand }) {
         <div className="row between">
           <h3>Renk paleti</h3>
           <div className="row">
+            <Kartela c={c} palette={palette} savePalette={savePalette} />
+            <ChoiceLink c={c} />
             {c.logos.length > 0 && <AsyncButton className="btn sm" onClick={async () => savePalette((await api.post(`/api/companies/${c.id}/palette-from-logo`)).map((hex, i) => ({ name: palette[i]?.name || `Renk ${i + 1}`, hex })))}><Icon name="refresh" />Logodan çıkar</AsyncButton>}
             <button className="btn sm" onClick={() => savePalette([...palette, { name: `Renk ${palette.length + 1}`, hex: '#5B4CF0' }])}><Icon name="plus" />Renk ekle</button>
           </div>
@@ -188,8 +198,9 @@ function Overview({ c, reload, jobs, setTab, learnBrand }) {
               </div>
             ))}
           </div>
-        ) : <p className="muted small">Palet boş. Logo yüklendiğinde renkler otomatik çıkarılır.</p>}
+        ) : <p className="muted small">Palet boş. Logo yüklendiğinde renkler otomatik çıkarılır; hazır kartelalardan da seçebilirsin.</p>}
       </div>
+      <FontsCard c={c} reload={reload} />
       {jobs.length > 0 && (
         <div className="card">
           <div className="row between" style={{ padding: '14px 16px 6px' }}><h3>Son işler</h3><button className="btn sm ghost" onClick={() => setTab('isler')}>Tümü</button></div>
@@ -361,7 +372,7 @@ function StyleTab({ c, reload }) {
 
 // ---------------- dosyalar ----------------
 
-const ROLES = [['', 'Yalnızca dosya'], ['urun', 'Ürün görseli'], ['arkaplan', 'Arka plan fotoğrafı'], ['diger', 'Tasarım görseli']];
+const ROLES = [['', 'Yalnızca dosya'], ['urun', 'Ürün görseli'], ['arkaplan', 'Arka plan fotoğrafı'], ['diger', 'Tasarım görseli'], ['mockup', 'Mockup']];
 
 function Files({ c, reload }) {
   const { meta } = useApp();
@@ -404,6 +415,9 @@ function Files({ c, reload }) {
                 )}
                 {isImg(f) && <label className="check small"><input type="checkbox" checked={!!f.reference} onChange={async (e) => { try { await api.patch(`/api/companies/${c.id}/assets/files/${f.id}`, { reference: e.target.checked }); reload(); } catch (x) { toastErr(x); } }} />Referans</label>}
                 {f.aiPrompt && <span className="pill" title={f.aiPrompt}><Icon name="wand" size={11} />AI · {f.provider}</span>}
+                {f.role === 'urun' && (f.analysis?.prompt
+                  ? <span className="pill" style={{ cursor: 'pointer' }} title={f.analysis.prompt} onClick={() => copy(f.analysis.prompt)}><Icon name="copy" size={11} />Ürün promptu</span>
+                  : <AsyncButton className="btn sm" title="Ürünü piksel piksel tarif et" onClick={async () => { await api.post(`/api/companies/${c.id}/files/${f.id}/analyze`); reload(); }}><Icon name="search" />Ürünü tara</AsyncButton>)}
                 <div className="row" style={{ gap: 4 }}>
                   <a className="btn sm" href={f.url} download={f.name}><Icon name="download" /></a>
                   {isImg(f) && clipdrop && <AsyncButton className="btn sm" title="Arka planı sil (Clipdrop)" onClick={async () => { await api.post(`/api/companies/${c.id}/files/${f.id}/edit`, { op: 'removeBg' }); reload(); }}><Icon name="eraser" /></AsyncButton>}
@@ -415,7 +429,7 @@ function Files({ c, reload }) {
           ))}
         </div>
       ) : <Empty icon="file" title="Dosya yok">Ürün fotoğrafları, kampanya görselleri, briefler… Sürükleyip bırakabilirsin.</Empty>}
-      {preview && <Modal title={preview.name} onClose={() => setPreview(null)} size="wide"><img src={preview.url} alt="" style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }} />{preview.aiPrompt && <div className="prompt-box" style={{ marginTop: 12 }}>{preview.aiPrompt}</div>}</Modal>}
+      {preview && <Modal title={preview.name} onClose={() => setPreview(null)} size="wide"><img src={preview.url} alt="" style={{ maxWidth: '100%', display: 'block', margin: '0 auto' }} />{preview.aiPrompt && <div className="prompt-box" style={{ marginTop: 12 }}>{preview.aiPrompt}</div>}{preview.analysis?.prompt && <div className="prompt-box" style={{ marginTop: 12 }}>{preview.analysis.prompt}</div>}</Modal>}
     </div>
   );
 }

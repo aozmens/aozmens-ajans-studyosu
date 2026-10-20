@@ -34,6 +34,17 @@ function useRoute() {
   return r;
 }
 
+// Programın yazı tipleri arayüzde de önizlensin (marka kimliği, müşteri seçimi)
+let fontsLoaded = false;
+function loadFonts(fonts = []) {
+  if (fontsLoaded) return;
+  fontsLoaded = true;
+  const css = fonts.flatMap((f) => (f.files || []).map((x) => `@font-face{font-family:'${f.family}';font-weight:${x.weight};src:url(/fonts/${x.file}) format('truetype');font-display:swap}`)).join('');
+  const el = document.createElement('style');
+  el.textContent = css;
+  document.head.appendChild(el);
+}
+
 function applyTheme(t) {
   const dark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
@@ -49,8 +60,8 @@ function Login({ onDone }) {
         try { await api.post('/api/login', { password: pw }); onDone(); } catch (x) { setErr(x.message); }
       }}>
         <div className="brand" style={{ padding: 0 }}>
-          <div className="brand-mark">AS</div>
-          <div><div className="brand-name">Ajans Stüdyosu</div><div className="brand-sub">Devam etmek için giriş yapın</div></div>
+          <img className="brand-mark" src="/agent-cy-ikon.png" alt="Agent-cy" />
+          <div><div className="brand-name">Agent-cy</div><div className="brand-sub">Devam etmek için giriş yapın</div></div>
         </div>
         <div className="field">
           <label>Şifre</label>
@@ -124,7 +135,7 @@ export default function App() {
   const loadCompanies = useCallback(() => api.get('/api/companies').then(setCompanies).catch(() => {}), []);
   const loadJobs = useCallback(() => api.get('/api/jobs').then(setJobs).catch(() => {}), []);
   const loadSettings = useCallback(() => api.get('/api/settings').then((s) => { setSettings(s); applyTheme(s.theme); }).catch(() => {}), []);
-  const loadMeta = useCallback(() => api.get('/api/meta').then(setMeta).catch(() => {}), []);
+  const loadMeta = useCallback(() => api.get('/api/meta').then((m) => { loadFonts(m.fonts); setMeta(m); }).catch(() => {}), []);
 
   const boot = useCallback(async () => {
     const me = await api.get('/api/me').catch(() => ({ authed: false }));
@@ -222,10 +233,10 @@ export default function App() {
       <div className="app">
         <aside className={`sidebar ${sideOpen ? 'open' : ''}`}>
           <div className="brand">
-            <div className="brand-mark">AS</div>
+            <img className="brand-mark" src="/agent-cy-ikon.png" alt="Agent-cy" />
             <div style={{ minWidth: 0 }}>
-              <div className="brand-name">Ajans Stüdyosu</div>
-              <div className="brand-sub">{settings.agencyName}</div>
+              <div className="brand-name">Agent-cy</div>
+              <div className="brand-sub">{settings.agencyName && settings.agencyName !== 'Agent-cy' ? settings.agencyName : 'Yaratıcı ajans stüdyosu'}</div>
             </div>
           </div>
           <button className="search-trigger" onClick={() => setCmdk(true)}><Icon name="search" />Ara<kbd>Ctrl K</kbd></button>

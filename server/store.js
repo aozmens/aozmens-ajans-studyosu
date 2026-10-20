@@ -1,5 +1,6 @@
-// Yerel veri deposu: tek JSON dosyası (db.json) + varlık dosyaları (DATA_DIR/assets/<sahip>/<dosya>).
-// Sunucuda kalıcı diske (ör. Railway volume) bağlanır; kod GitHub'da, veriler diskte durur.
+// Yerel veri deposu: tek JSON dosyası (db.json) + varlık dosyaları.
+// Her firmanın kendi klasörü var: DATA_DIR/firmalar/<Firma adı>/<01 Logolar, 02 Marka Dosyası, …>/<dosya>.
+// İlham arşivi (ajans) DATA_DIR/assets/_ajans altında. Sunucuda kalıcı diske (ör. Railway volume) bağlanır.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -13,7 +14,13 @@ export const DEFAULT_SETTINGS = {
   designModel: 'claude-sonnet-5-5',
   effort: 'medium', // low | medium | high | xhigh | max
   concurrency: 3,
-  agencyName: 'AOZTECH Ajans',
+  agencyName: 'Agent-cy',
+  // Marka dosyasının sonundaki kurumsal alt bilgi
+  agencyEmail: '',
+  agencyPhone: '',
+  agencyWebsite: '',
+  agencyAddress: '',
+  agencyLogo: '', // ajans klasöründeki logo dosyası
   theme: 'system',
   designQa: 1, // her tasarımdan sonra çizip kontrol eden tur sayısı (0-2)
   fallbacks: true, // Claude reddederse sunucu tarafında yedek modele geç
@@ -55,12 +62,51 @@ export const id = () => crypto.randomUUID();
 
 const dbFile = () => path.join(root, 'db.json');
 export const assetRoot = () => path.join(root, 'assets');
-export const assetDir = (owner) => {
-  const d = path.join(assetRoot(), owner);
+export const companiesRoot = () => path.join(root, 'firmalar');
+
+// Firma klasöründeki alt klasörler (dosya yöneticisinde sıralı görünsün diye numaralı)
+export const FOLDERS = {
+  logos: '01 Logolar',
+  brandBook: '02 Marka Dosyası',
+  images: '03 Görseller',
+  products: '04 Ürünler',
+  mockups: '05 Mockuplar',
+  styles: '06 Örnek Tasarımlar',
+  logoStudio: '07 Logo Stüdyosu',
+  webClone: '08 Web Klon',
+  jobs: '09 İşler',
+  other: '10 Diğer',
+};
+// İlham arşivinin (ajans) alt klasörleri
+export const AGENCY_FOLDERS = { inspiration: 'ilham', mockups: 'mockuplar', designLanguage: 'tasarim-dili', brand: 'ajans' };
+
+// Dosya ve klasör adı: Windows'ta yasak karakterler çıkarılır, Türkçe harfler korunur
+export const safeName = (s, n = 80) => String(s || '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').replace(/[. ]+$/, '').trim().slice(0, n) || 'Adsız';
+
+// Sahibin (firma ya da ajans) klasörü. Klasörü atanmamış eski firmalar assets/<id> altında kalır.
+export function ownerDir(ownerId) {
+  if (ownerId !== AGENCY_ID) {
+    const c = db?.companies.find((x) => x.id === ownerId);
+    if (c?.folder) return path.join(companiesRoot(), c.folder);
+  }
+  return path.join(assetRoot(), path.basename(String(ownerId)));
+}
+export const assetDir = (owner, sub = '') => {
+  const d = path.join(ownerDir(owner), sub);
   fs.mkdirSync(d, { recursive: true });
   return d;
 };
-export const assetPath = (owner, file) => path.join(assetRoot(), owner, file);
+// file: sahibin klasörüne göreli yol ("01 Logolar/abc.png"); eski kayıtlarda yalnızca dosya adı
+export const assetPath = (owner, file) => path.join(ownerDir(owner), file);
+// Türetilmiş kopya (ör. tasarımda kullanılan küçültülmüş görsel, logonun PNG'si): asıl dosyanın klasöründeki
+// ".kopyalar" alt klasörüne yazılır, klasörde yalnızca kullanıcının dosyaları görünür. Göreli yolu döndürür.
+export function writeSibling(owner, file, name, buf) {
+  const dir = path.posix.dirname(file);
+  const rel = dir === '.' ? name : `${dir}/.kopyalar/${name}`;
+  fs.mkdirSync(path.dirname(assetPath(owner, rel)), { recursive: true });
+  fs.writeFileSync(assetPath(owner, rel), buf);
+  return rel;
+}
 export const cacheDir = () => {
   const d = path.join(root, 'cache');
   fs.mkdirSync(d, { recursive: true });
@@ -82,8 +128,10 @@ export function init(dir) {
   }
   db = { ...emptyDb(), ...db };
   db.settings = mergeSettings(DEFAULT_SETTINGS, db.settings || {});
+  if (db.settings.agencyName === 'AOZTECH Ajans') db.settings.agencyName = 'Agent-cy'; // programın adı Agent-cy oldu
   if (!db.tools) db.tools = DEFAULT_TOOLS.map((t) => ({ ...t, id: id(), guide: '', createdAt: now() }));
   for (const c of db.companies) migrateCompany(c);
+  for (const c of db.companies) ensureFolder(c);
   seedAgency();
   for (const j of db.jobs) {
     if (j.status === 'running') j.status = 'stopped';
@@ -185,6 +233,8 @@ export function migrateCompany(c) {
     const hex = String(c.colors).match(/#(?:[0-9a-f]{6}|[0-9a-f]{3})\b/gi) || [];
     c.palette = hex.map((h, i) => ({ name: `Renk ${i + 1}`, hex: h.toUpperCase() }));
   }
+  for (const k of ['brandBooks', 'webClones']) if (!Array.isArray(c[k])) c[k] = [];
+  for (const k of ['fontHeading', 'fontBody']) if (typeof c[k] !== 'string') c[k] = '';
   if (c.styleGuide === undefined) c.styleGuide = null;
   if (c.brandProfile === undefined) c.brandProfile = null;
   // Logo projelerine sonradan eklenen alanlar: örnek logolar, eskiz taraması, cevaplar, ikon yolu
@@ -196,12 +246,71 @@ export function migrateCompany(c) {
   }
 }
 
+// Firma klasörü: ilk açılışta eski assets/<id> klasörü firmalar/<Firma adı> altına taşınır,
+// bilinen dosyalar türlerine göre alt klasörlere ayrılır (kayıtlardaki yollar da güncellenir).
+function uniqueFolder(name, selfId) {
+  const base = safeName(name, 60);
+  for (let i = 1; ; i++) {
+    const f = i === 1 ? base : `${base} (${i})`;
+    const taken = db.companies.some((x) => x.id !== selfId && x.folder?.toLocaleLowerCase('tr-TR') === f.toLocaleLowerCase('tr-TR'));
+    if (!taken && (!fs.existsSync(path.join(companiesRoot(), f)) || db.companies.find((x) => x.id === selfId)?.folder === f)) return f;
+  }
+}
+
+export function fileFolder(entry) {
+  const mime = entry.mime || '';
+  if (entry.role === 'urun') return FOLDERS.products;
+  if (entry.role === 'mockup') return FOLDERS.mockups;
+  if (/^(image|video)\//.test(mime)) return FOLDERS.images;
+  return FOLDERS.other;
+}
+
+export function ensureFolder(c) {
+  if (c.folder) {
+    fs.mkdirSync(path.join(companiesRoot(), c.folder), { recursive: true });
+    return;
+  }
+  const legacy = path.join(assetRoot(), c.id);
+  c.folder = uniqueFolder(c.name, c.id);
+  const dir = path.join(companiesRoot(), c.folder);
+  fs.mkdirSync(companiesRoot(), { recursive: true });
+  if (fs.existsSync(legacy)) {
+    try { fs.renameSync(legacy, dir); } catch { fs.cpSync(legacy, dir, { recursive: true }); fs.rmSync(legacy, { recursive: true, force: true }); }
+  }
+  fs.mkdirSync(dir, { recursive: true });
+  const move = (entry, folder) => {
+    for (const k of ['file', 'pngFile', 'designFile', 'thumbFile']) {
+      const f = entry?.[k];
+      if (!f || f.includes('/')) continue;
+      const src = path.join(dir, f);
+      if (!fs.existsSync(src)) continue;
+      fs.mkdirSync(path.join(dir, folder), { recursive: true });
+      try { fs.renameSync(src, path.join(dir, folder, f)); entry[k] = `${folder}/${f}`; } catch {}
+    }
+  };
+  for (const l of c.logos || []) move(l, FOLDERS.logos);
+  for (const f of c.files || []) move(f, fileFolder(f));
+  for (const s of c.styles || []) move(s, FOLDERS.styles);
+  for (const p of c.logoProjects || []) for (const s of [...(p.sketches || []), ...(p.refs || [])]) move(s, FOLDERS.logoStudio);
+}
+
+// Marka adı değişince klasör adı da değişir (yollar klasöre göreli olduğu için kayıtlar etkilenmez)
+function renameFolder(c) {
+  const want = safeName(c.name, 60);
+  if (!c.folder || c.folder === want || c.folder.startsWith(want + ' (')) return;
+  const next = uniqueFolder(c.name, c.id);
+  try {
+    fs.renameSync(path.join(companiesRoot(), c.folder), path.join(companiesRoot(), next));
+    c.folder = next;
+  } catch {}
+}
+
 export const listCompanies = () => db.companies.map(publicCompany);
 export const getCompany = (cid) => db.companies.find((c) => c.id === cid) || null;
 export const getAgency = () => db.agency;
 export const owner = (cid) => (cid === AGENCY_ID ? db.agency : getCompany(cid));
 
-const COMPUTED = ['logos', 'files', 'styles', 'styleGuide', 'memory', 'feedback', 'logoUrl', 'jobCount', 'designCount', 'pendingFeedback', 'logoProjects', 'brandProfile'];
+const COMPUTED = ['logos', 'files', 'styles', 'styleGuide', 'memory', 'feedback', 'logoUrl', 'jobCount', 'designCount', 'pendingFeedback', 'logoProjects', 'brandProfile', 'folder', 'brandBooks', 'webClones', 'clientChoice'];
 
 export function saveCompany(input) {
   const data = { ...input };
@@ -212,24 +321,28 @@ export function saveCompany(input) {
     const c = getCompany(data.id);
     if (!c) throw new Error('Marka bulunamadı');
     Object.assign(c, data, { updatedAt: now() });
+    if (data.name) renameFolder(c);
     flush();
     return c.id;
   }
   const c = { ...data, id: id(), createdAt: now(), updatedAt: now() };
   migrateCompany(c);
   db.companies.unshift(c);
+  ensureFolder(c);
   flush();
   return c.id;
 }
 
 export function deleteCompany(cid) {
+  const dir = ownerDir(cid);
   db.companies = db.companies.filter((c) => c.id !== cid);
   db.jobs = db.jobs.filter((j) => j.companyId !== cid);
-  fs.rmSync(path.join(assetRoot(), cid), { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(path.join(assetRoot(), path.basename(cid)), { recursive: true, force: true });
   flush();
 }
 
-export const assetUrl = (cid, file) => `/files/${cid}/${encodeURIComponent(file)}`;
+export const assetUrl = (cid, file) => `/files/${cid}/${String(file).split('/').map(encodeURIComponent).join('/')}`;
 
 export function publicCompany(c) {
   if (!c) return null;
@@ -247,12 +360,19 @@ export function publicCompany(c) {
     designCount: jobs.reduce((n, j) => n + (j.designs || []).filter((d) => (d.variants || []).some((v) => v.frames?.some((f) => f.svg))).length, 0),
     pendingFeedback: c.feedback.filter((f) => !f.learned).length,
     logoProjects: (c.logoProjects || []).map((p) => ({ ...p })),
+    brandBooks: (c.brandBooks || []).map((b) => ({ ...b, url: assetUrl(c.id, b.file) })),
+    webClones: (c.webClones || []).map((w) => ({ ...w, log: undefined, previewUrl: w.entry ? assetUrl(c.id, `${w.folder}/${w.entry}`) : null })),
   };
 }
 
 export function publicAgency() {
   const a = db.agency;
-  return { ...a, styles: a.styles.map((s) => ({ ...s, url: assetUrl(AGENCY_ID, s.file) })) };
+  return {
+    ...a,
+    styles: a.styles.map((s) => ({ ...s, url: assetUrl(AGENCY_ID, s.file) })),
+    mockups: a.mockups.map((m) => ({ ...m, url: m.file ? assetUrl(AGENCY_ID, m.file) : null })),
+    designLanguages: a.designLanguages.map((d) => ({ ...d, pdfUrl: d.pdfFile ? assetUrl(AGENCY_ID, d.pdfFile) : null })),
+  };
 }
 
 // Ana logonun çizilebilir hali (PNG kopyası varsa o)
@@ -284,13 +404,17 @@ export function parseDataUrl(dataUrl) {
   return { mime: m[1], buf };
 }
 
-// Bir sahibin (firma ya da ajans) klasörüne dosya yazar, girdiyi döndürür
-export function writeAsset(ownerId, { name, dataUrl, buf, mime, ext }) {
+// Bir sahibin (firma ya da ajans) klasörüne dosya yazar, girdiyi döndürür. folder: alt klasör (FOLDERS)
+export function writeAsset(ownerId, { name, dataUrl, buf, mime, ext, folder = '' }) {
   if (dataUrl) ({ buf, mime } = parseDataUrl(dataUrl));
   const e = ext || EXT[mime] || (path.extname(name || '').slice(1).toLowerCase() || 'bin');
   const fid = id();
-  const file = `${fid}.${e}`;
-  fs.writeFileSync(path.join(assetDir(ownerId), file), buf);
+  // Klasörde okunur ad: "Ürün fotoğrafı_1a2b3c.jpg"
+  const base = safeName(String(name || '').replace(/\.[a-z0-9]{2,5}$/i, ''), 60).replace(/^Adsız$/, 'dosya');
+  const fname = folder ? `${base}_${fid.slice(0, 6)}.${e}` : `${fid}.${e}`;
+  const file = folder ? `${folder}/${fname}` : fname;
+  assetDir(ownerId, folder);
+  fs.writeFileSync(assetPath(ownerId, file), buf);
   return { id: fid, name: name || file, file, mime: mime || 'application/octet-stream', size: buf.length, addedAt: now() };
 }
 
@@ -451,7 +575,7 @@ export function companyDesigns(cid) {
 
 export function seedAgency(force = false) {
   if (db.agency && !force) {
-    if (!Array.isArray(db.agency.styles)) db.agency.styles = [];
+    for (const k of ['styles', 'mockups', 'designLanguages']) if (!Array.isArray(db.agency[k])) db.agency[k] = [];
     return;
   }
   const keepEnabled = db.agency ? db.agency.enabled : true;
@@ -462,7 +586,7 @@ export function seedAgency(force = false) {
     guide = fs.readFileSync(new URL('../assets/ajans-stili/rehber.md', import.meta.url), 'utf8');
   } catch {}
   db.agency = {
-    id: AGENCY_ID, enabled: keepEnabled, styles,
+    id: AGENCY_ID, enabled: keepEnabled, styles, mockups: db.agency?.mockups || [], designLanguages: db.agency?.designLanguages || [],
     styleGuide: guide ? { text: guide, learnedAt: null, sampleCount: 0, editedAt: null, bundled: true } : null,
   };
   flush();

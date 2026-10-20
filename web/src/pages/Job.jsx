@@ -65,6 +65,7 @@ export default function Job({ id }) {
           <div className="row" style={{ gap: 0 }}>
             <button className="btn" style={{ borderRadius: '9px 0 0 9px' }} onClick={() => download(`/api/jobs/${id}/export.zip`)}><Icon name="download" />Klasör (ZIP)</button>
             <button className="btn" style={{ borderRadius: '0 9px 9px 0', marginLeft: -1 }} disabled={!job.designs.length} title="Yalnızca tasarımlar, boyut klasörlerinde" onClick={() => download(`/api/jobs/${id}/export.zip?only=designs`)}>Tasarımlar</button>
+            <AsyncButton className="btn" style={{ marginLeft: 6 }} title="Markanın 09 İşler klasörüne yaz" onClick={async () => { const r = await api.post(`/api/jobs/${id}/save-to-folder`); toast(`Klasöre kaydedildi: ${r.folder}`); }}><Icon name="folder" />Klasöre kaydet</AsyncButton>
           </div>
           {!running && <button className="btn ghost danger icon" title="İşi sil" onClick={async () => { if (confirmAsk('İş silinsin mi?')) { await api.del(`/api/jobs/${id}`); go(c ? `marka/${c.id}/isler` : ''); } }}><Icon name="trash" /></button>}
         </div>

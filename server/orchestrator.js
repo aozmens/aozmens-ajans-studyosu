@@ -9,6 +9,7 @@ import * as render from './render.js';
 import * as imagegen from './imagegen.js';
 import { send } from './events.js';
 import { JOB_TYPES, FORMATS } from './jobTypes.js';
+import { writeJobFolder } from './export.js';
 
 const running = new Map(); // jobId → AbortController
 const MAX_CTX_PER_STEP = 14000;
@@ -37,7 +38,7 @@ const today = () => new Date().toLocaleDateString('tr-TR', { day: 'numeric', mon
 const APP_SUFFIX = (strict = false) => `
 
 ## Bu programdaki çalışma şeklin
-Şu an "Ajans Stüdyosu" programının içinde çalışıyorsun. Dosya, terminal, web veya alt ajan araçların yok; iş akışını ajans yöneticisi ve program yönetir, sana düşen görevi sen yaparsın.
+Şu an "Agent-cy" programının içinde çalışıyorsun. Dosya, terminal, web veya alt ajan araçların yok; iş akışını ajans yöneticisi ve program yönetir, sana düşen görevi sen yaparsın.
 ${strict
     ? '- Bu adımın çıktısı program tarafından otomatik okunur. Görevde istenen biçimin dışına çıkma: açıklama, Markdown başlığı veya "Varsayımlar" bölümü ekleme.'
     : '- Çıktını doğrudan, eksiksiz ve kullanıma hazır olarak Markdown biçiminde yaz. "Dosyaya kaydettim" gibi ifadeler kullanma.\n- Eksik bilgi varsa makul varsayım yap ve en sonda kısa bir "Varsayımlar" başlığıyla belirt.'}
@@ -163,6 +164,7 @@ export function companyBrief(company, job) {
     c.website && `- Web sitesi: ${c.website}`,
     c.social && `- Sosyal medya hesapları: ${c.social}`,
     c.palette?.length ? `- Marka renk paleti: ${c.palette.map((p) => `${p.name} ${p.hex}`).join(', ')}` : (c.colors && `- Marka renkleri: ${c.colors}`),
+    (c.fontHeading || c.fontBody) && `- Marka yazı tipleri (marka kimliğinde seçildi; tasarımlarda bunları kullan): başlık ${c.fontHeading || c.fontBody}, gövde ${c.fontBody || c.fontHeading}`,
     c.fonts && `- Fontlar: ${c.fonts}`,
     c.tone && `- Marka tonu: ${c.tone}`,
     c.audience && `- Hedef kitle: ${c.audience}`,
@@ -281,7 +283,7 @@ export function createAndRun(input) {
     if (options.agents.length && job.request && job.request.length > 160) {
       job.steps.push(newStep('plan', { title: 'İş planı', agent: 'ajans-yoneticisi', agentLabel: agents.LABELS['ajans-yoneticisi'] }));
     } else {
-      job.steps.push(...designSteps(job), learnStep());
+      job.steps.push(...designSteps(job), ...brandBookSteps(job), learnStep());
     }
   } else {
     if (company?.website) job.steps.push(newStep('website', { title: 'Web sitesi incelemesi', agent: 'program', agentLabel: 'Program' }));
@@ -290,6 +292,20 @@ export function createAndRun(input) {
   emit(job);
   run(job.id);
   return job.id;
+}
+
+// Yeni işte "Marka dosyası hazırla" açıksa: logo zeminleri, ikon, fontlar, renkler, mockuplar ve ajans alt bilgisiyle PDF
+function brandBookSteps(job) {
+  if (!job.options?.brandBook) return [];
+  return [newStep('brandbook', { agent: 'grafik-tasarimci', agentLabel: agents.LABELS['grafik-tasarimci'], title: 'Marka dosyası (PDF)' })];
+}
+
+async function stepBrandBook(job, step, company, signal) {
+  const { build } = await import('./brandBook.js');
+  const entry = await build(company.id, { mockupIds: job.options.brandBookMockups, jobId: job.id, signal });
+  addUsage(job, entry.usage, step);
+  job.brandBookId = entry.id;
+  step.output = `Marka dosyası hazır: **${entry.name}** (${Math.round(entry.size / 1024)} KB). Markanın "${store.FOLDERS.brandBook}" klasörüne kaydedildi; Marka → Klasör sekmesinden açabilirsin.`;
 }
 
 function designSteps(job) {
@@ -337,9 +353,9 @@ async function run(jobId) {
         step.status = 'done';
       } catch (e) {
         if (ctl.signal.aborted) { step.status = 'pending'; throw e; }
-        if (step.kind === 'website' || step.kind === 'learn') {
+        if (step.kind === 'website' || step.kind === 'learn' || step.kind === 'brandbook') {
           step.status = 'skipped';
-          step.output = step.kind === 'learn' ? `Öğrenme adımı atlandı: ${e.message}` : `Web sitesi okunamadı: ${e.message}`;
+          step.output = step.kind === 'learn' ? `Öğrenme adımı atlandı: ${e.message}` : step.kind === 'brandbook' ? `Marka dosyası hazırlanamadı: ${e.message}` : `Web sitesi okunamadı: ${e.message}`;
         } else {
           step.status = 'error';
           step.error = e.message;
@@ -351,6 +367,8 @@ async function run(jobId) {
       }
     }
     job.status = 'done';
+    // Bitmiş iş markanın "09 İşler" klasörüne de yazılır (tasarımlar PNG, metinler, takvim)
+    try { job.folder = writeJobFolder(job); } catch {}
   } catch (e) {
     job.status = ctl.signal.aborted ? 'stopped' : 'error';
     job.error = ctl.signal.aborted ? null : e.message;
@@ -372,6 +390,7 @@ async function runStep(job, step, index, signal) {
     case 'designList': return stepDesignList(job, step, index, company, signal, stream);
     case 'designs': return stepDesigns(job, step, company, signal);
     case 'learn': return stepLearn(job, step, company, signal);
+    case 'brandbook': return stepBrandBook(job, step, company, signal);
     default: throw new Error('Bilinmeyen adım: ' + step.kind);
   }
 }
@@ -382,7 +401,7 @@ export async function fetchPageText(url, signal) {
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
   const res = await fetch(url, {
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
-    headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36 AjansStudyosu/3.0' },
+    headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36 Agent-cy/3.0' },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const html = await res.text();
@@ -461,7 +480,7 @@ JSON biçimi:
   const newSteps = adimlar.map((a) => newStep('agent', {
     agent: a.ajan, agentLabel: agents.LABELS[a.ajan] || a.ajan, title: a.baslik || 'Görev', task: a.gorev || '',
   }));
-  newSteps.push(...designSteps(job));
+  newSteps.push(...designSteps(job), ...brandBookSteps(job));
   if (!t.quick) {
     newSteps.push(newStep('agent', {
       agent: 'ajans-yoneticisi', agentLabel: agents.LABELS['ajans-yoneticisi'], title: 'Teslim özeti',
@@ -511,7 +530,7 @@ ${step.task}`;
 // ---------------- tasarlanacak içerik listesi ----------------
 
 function designAssetList(company) {
-  const all = (company?.files || []).filter((f) => f.role && f.designFile);
+  const all = (company?.files || []).filter((f) => f.role && f.role !== 'mockup' && f.designFile);
   if (!all.length) return '';
   return `Firmanın tasarımlarda kullanılabilecek görselleri (her içeriğin "gorseller" alanına konusuna uyan görsellerin kimliklerini yaz):\n${all.map((f) => `- ${f.id}: ${ROLE_TR[f.role]} · ${f.name}${f.aiPrompt ? ' (AI üretimi)' : ''}`).join('\n')}\n\n`;
 }
@@ -673,7 +692,7 @@ Tüm tasarımlar aynı kampanyanın parçası: renk, tipografi ve görsel dil se
 
 // Tasarımda kullanılacak firma görselleri: bu boyut için üretilen AI görsel, kullanıcının seçtikleri, sonra diğerleri (en fazla 6)
 function designAssets(company, d, variantKey) {
-  const all = (company?.files || []).filter((f) => f.role && f.designFile);
+  const all = (company?.files || []).filter((f) => f.role && f.role !== 'mockup' && f.designFile);
   const want = [d.aiImages?.[variantKey], ...(d.images || []), ...(Array.isArray(d.gorseller) ? d.gorseller : [])].filter(Boolean).map((x) => String(x).replace(/^IMG:/, ''));
   const first = want.map((fid) => all.find((f) => f.id === fid)).filter(Boolean);
   const rest = all.filter((f) => !f.aiPrompt || first.includes(f));
@@ -720,10 +739,9 @@ async function ensureAiImage(job, d, variant, company, signal) {
 
 // Görseli firmanın dosyalarına ekler; tasarımda kullanılacak küçültülmüş kopyasını hazırlar
 export async function saveCompanyImage(company, img, { name, role = 'arkaplan', aiPrompt, provider } = {}) {
-  const entry = store.writeAsset(company.id, { name, buf: img.buf, mime: img.mime });
+  const entry = store.writeAsset(company.id, { name, buf: img.buf, mime: img.mime, folder: store.fileFolder({ role, mime: img.mime }) });
   const p = await render.prepareImage(img.buf, 1600);
-  const dfile = `${entry.id}-d.${p.ext}`;
-  fs.writeFileSync(store.assetPath(company.id, dfile), p.buf);
+  const dfile = store.writeSibling(company.id, entry.file, `${entry.id}-d.${p.ext}`, p.buf);
   Object.assign(entry, { role, designFile: dfile, width: p.width, height: p.height, alpha: p.alpha, reference: false });
   if (aiPrompt) Object.assign(entry, { aiPrompt, provider, source: 'ai' });
   store.addAsset(company.id, 'files', entry);

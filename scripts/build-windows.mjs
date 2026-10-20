@@ -70,7 +70,8 @@ const env = { ...process.env, GOOS: 'windows', GOARCH: 'amd64', CGO_ENABLED: '0'
 run(GO, ['run', 'github.com/tc-hib/go-winres@v0.3.3', 'simply', '--arch', 'amd64', '--icon', path.join(ROOT, 'assets/marka/agent-cy-ikon.png'),
   '--manifest', 'gui', '--product-name', 'Agent-cy', '--file-description', 'Agent-cy', '--product-version', version, '--file-version', version,
   '--copyright', `© ${new Date().getFullYear()} Agent-cy`, '--original-filename', 'Agent-cy.exe'], { cwd: launcher, env: { ...process.env } });
-run(GO, ['build', '-trimpath', '-ldflags', '-s -w -H=windowsgui', '-o', path.join(PKG, 'Agent-cy.exe'), '.'], { cwd: launcher, env });
+const stamp = (() => { try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { return 'yerel'; } })() + '-' + new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+run(GO, ['build', '-trimpath', '-ldflags', `-s -w -H=windowsgui -X main.build=${stamp}`, '-o', path.join(PKG, 'Agent-cy.exe'), '.'], { cwd: launcher, env });
 for (const f of fs.readdirSync(launcher)) if (f.endsWith('.syso')) fs.rmSync(path.join(launcher, f));
 
 fs.writeFileSync(path.join(PKG, 'OKUBENI.txt'), `Agent-cy ${version} · Windows

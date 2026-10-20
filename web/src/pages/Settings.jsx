@@ -143,7 +143,7 @@ export default function Settings({ section = 'claude' }) {
               </div>
               <div className="card pad stack">
                 <h3>Sürüm</h3>
-                <span className="small muted">Agent-cy {meta.version}{meta.commit ? ` · ${meta.commit}` : ''}. GitHub'daki main dalına gelen her değişiklik sunucuya otomatik yüklenir.</span>
+                <span className="small muted">Agent-cy {meta.version}{meta.commit ? ` · ${meta.commit}` : ''}. {meta.desktop ? 'Bilgisayar sürümü; yeni sürüm için yeni zip\'i çıkarıp Agent-cy.exe\'yi aç (veriler Belgeler\\Agent-cy\'de kalır).' : 'GitHub\'daki main dalına gelen her değişiklik sunucuya otomatik yüklenir.'}</span>
                 <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await api.post('/api/logout'); location.reload(); }}><Icon name="logout" />Çıkış yap</button>
               </div>
             </>

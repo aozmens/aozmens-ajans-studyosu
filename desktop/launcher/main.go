@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -18,6 +19,9 @@ import (
 	"syscall"
 	"time"
 )
+
+// Derleme damgası (build-windows.mjs -ldflags -X ile koyar): sürümler karışmasın diye
+var build = "dev"
 
 func main() {
 	exe, _ := os.Executable()
@@ -37,8 +41,12 @@ func main() {
 	portFile := filepath.Join(dataDir, ".port")
 	if b, err := os.ReadFile(portFile); err == nil {
 		if p, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil && alive(p) {
-			openWindow(fmt.Sprintf("http://127.0.0.1:%d", p), dataDir)
-			return
+			if runningBuild(p) == build {
+				openWindow(fmt.Sprintf("http://127.0.0.1:%d", p), dataDir)
+				return
+			}
+			// Açık olan başka (eski) bir sürüm: kapatıp bu sürümü başlat
+			quit(p)
 		}
 	}
 
@@ -69,6 +77,7 @@ func main() {
 		"PORT="+strconv.Itoa(port),
 		"HOST=127.0.0.1",
 		"AJANS_DESKTOP=1",
+		"GIT_COMMIT="+build,
 		"APP_PASSWORD=",
 	)
 	hideWindow(cmd)
@@ -110,6 +119,30 @@ func alive(port int) bool {
 	}
 	r.Body.Close()
 	return r.StatusCode < 500
+}
+
+func runningBuild(port int) string {
+	c := http.Client{Timeout: 2 * time.Second}
+	r, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/api/meta", port))
+	if err != nil {
+		return ""
+	}
+	defer r.Body.Close()
+	var m struct {
+		Commit string `json:"commit"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&m)
+	return m.Commit
+}
+
+func quit(port int) {
+	c := http.Client{Timeout: 2 * time.Second}
+	if r, err := c.Post(fmt.Sprintf("http://127.0.0.1:%d/api/desktop/quit", port), "application/json", strings.NewReader("{}")); err == nil {
+		r.Body.Close()
+	}
+	for i := 0; i < 20 && alive(port); i++ {
+		time.Sleep(250 * time.Millisecond)
+	}
 }
 
 func freePort() int {

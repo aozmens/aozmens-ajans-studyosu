@@ -32,7 +32,7 @@ const DESKTOP = process.env.AJANS_DESKTOP === '1';
 const PASSWORD = process.env.AJANS_DESKTOP === '1' ? '' : process.env.APP_PASSWORD || '';
 const SECRET = process.env.SESSION_SECRET || crypto.createHash('sha256').update('ajans:' + PASSWORD + ':' + DATA_DIR).digest('hex');
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
-const COMMIT = (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT || '').slice(0, 7);
+const COMMIT = process.env.RAILWAY_GIT_COMMIT_SHA ? process.env.RAILWAY_GIT_COMMIT_SHA.slice(0, 7) : (process.env.GIT_COMMIT || '').slice(0, 24);
 
 store.init(DATA_DIR);
 agents.init(path.join(ROOT, 'agents'));
@@ -279,6 +279,13 @@ app.get('/api/companies/:id/folder.zip', h((req, res) => {
   const { name, files } = exporter.companyFolderFiles(req.params.id);
   sendZip(res, name, files);
 }));
+// Bilgisayar sürümü: yeni sürüm açılırken eski sürüm hâlâ çalışıyorsa başlatıcı onu bu adresle kapatır
+app.post('/api/desktop/quit', (req, res) => {
+  if (!DESKTOP || !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)) return res.status(403).end();
+  res.json({ ok: true });
+  console.log('Yeni sürüm açılıyor; bu sürüm kapanıyor.');
+  setTimeout(() => { store.flush(); process.exit(0); }, 300);
+});
 // Masaüstü sürümünde firma klasörünü Windows Gezgini'nde açar
 app.post('/api/companies/:id/folder/open', h((req) => {
   if (!DESKTOP) throw new Error('Klasörü açmak yalnızca bilgisayar sürümünde çalışır; burada ZIP olarak indirebilirsin.');

@@ -34,8 +34,11 @@ export default function NewJob({ initial, onClose }) {
   const [useInspiration, setUseInspiration] = useState(true);
   const [inspirationIds, setInspirationIds] = useState(null);
   const [pickInsp, setPickInsp] = useState(false);
-  const [aiImages, setAiImages] = useState(false);
   const connected = meta.providers.filter((p) => p.connected);
+  const openaiOn = connected.some((p) => p.id === 'openai');
+  // Tasarım motoru: OpenAI bağlıysa varsayılan GPT Image (bitmiş görsel), değilse Claude (SVG)
+  const [engine, setEngine] = useState(openaiOn ? 'gpt' : 'claude');
+  const [aiImages, setAiImages] = useState(connected.length > 0);
   const [imageProvider, setImageProvider] = useState((connected.find((p) => p.id === settings.imageProvider) || connected[0])?.id || '');
   const [tools, setTools] = useState([]);
   const [toolList, setToolList] = useState([]);
@@ -67,7 +70,7 @@ export default function NewJob({ initial, onClose }) {
       const options = {
         agents: selAgents, month: type === 'sosyal-medya-aylik' ? month : undefined, platforms, budget,
         makeDesigns, formats, postCount: +postCount, carouselCount: +carouselCount, slideCount: +slideCount,
-        useBrandProfile, useInspiration, inspirationIds: useInspiration ? insp : [], aiImages: makeDesigns && aiImages && !!imageProvider, imageProvider, tools,
+        useBrandProfile, useInspiration, inspirationIds: useInspiration ? insp : [], aiImages: makeDesigns && engine === 'claude' && aiImages && !!imageProvider, imageProvider, designEngine: makeDesigns && engine === 'gpt' && openaiOn ? 'gpt' : 'claude', tools,
         brandBook, brandBookMockups: bookMockups,
       };
       const { id } = await api.post('/api/jobs', { companyId, type, title: title.trim() || autoTitle, request, options });
@@ -161,14 +164,22 @@ export default function NewJob({ initial, onClose }) {
                 <div className="field"><label>Bunlardan carousel</label><input className="input" type="number" min="0" max={postCount} value={carouselCount} onChange={(e) => setCarouselCount(e.target.value)} /></div>
                 <div className="field"><label>Carousel slayt sayısı</label><input className="input" type="number" min="2" max="10" value={slideCount} disabled={!+carouselCount} onChange={(e) => setSlideCount(e.target.value)} /></div>
               </div>
-              <div className="row">
-                <label className="check"><input type="checkbox" checked={aiImages} disabled={!connected.length} onChange={(e) => setAiImages(e.target.checked)} />Her tasarıma AI görsel üret</label>
+              <div className="field">
+                <label>Tasarım motoru</label>
+                <div className="seg" style={{ alignSelf: 'flex-start' }}>
+                  <button type="button" className={engine === 'gpt' ? 'on' : ''} disabled={!openaiOn} onClick={() => setEngine('gpt')}>GPT Image (bitmiş görsel)</button>
+                  <button type="button" className={engine === 'claude' ? 'on' : ''} onClick={() => setEngine('claude')}>Claude (SVG, düzenlenebilir)</button>
+                </div>
+                <span className="hint">{engine === 'gpt' ? 'Tasarımın tamamını OpenAI GPT Image çizer: ilham görselleri ve ürün fotoğrafı referans olarak gider, markanın gerçek logosu üstüne konur. Görsel başına ~0,17 $.' : 'Claude tasarımı SVG olarak çizer; yazılar ve yerleşim birebir düzenlenebilir. İstersen arka plan fotoğrafını AI üretir.'}{!openaiOn && ' GPT Image için Ayarlar → Entegrasyonlar → OpenAI anahtarını gir.'}</span>
+              </div>
+              {engine === 'claude' && <div className="row">
+                <label className="check"><input type="checkbox" checked={aiImages} disabled={!connected.length} onChange={(e) => setAiImages(e.target.checked)} />Her tasarıma AI arka plan görseli üret</label>
                 {connected.length ? (
                   <select className="select" style={{ width: 220 }} value={imageProvider} disabled={!aiImages} onChange={(e) => setImageProvider(e.target.value)}>
                     {connected.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
                 ) : <span className="small muted">Görsel motoru bağlı değil (<a href="#/ayarlar/entegrasyonlar" onClick={onClose}>Ayarlar → Entegrasyonlar</a>).</span>}
-              </div>
+              </div>}
             </>
           )}
         </div>

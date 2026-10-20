@@ -10,6 +10,13 @@ export const fmtShort = (k) => FMT_SHORT[k] || k;
 const ver = (f) => `${f?.history?.length || 0}-${f?.svg?.length || 0}`;
 export const frameUrl = (jobId, d, v, i, w) => `/api/jobs/${jobId}/designs/${d.id}/${v.key}/${i}.png?${w ? `w=${w}&` : ''}v=${ver(v.frames[i])}`;
 
+// Tasarımı hangi motorun ürettiği (eski işlerde kayıt yoksa AI arka plan görseline bakılır)
+export function engineLabel(d, v) {
+  const e = v?.frames?.[0]?.engine;
+  if (e === 'gpt') return `GPT Image${v.frames[0].model ? ` · ${v.frames[0].model.replace('gpt-image-', '')}` : ''}`;
+  return d.aiImages?.[v?.key] ? 'Claude SVG + AI görsel' : 'Claude SVG';
+}
+
 export function DesignCard({ jobId, d, sub, onOpen }) {
   const v = d.variants.find((x) => x.frames[0]?.svg) || d.variants[0];
   const ready = v?.frames[0]?.svg;
@@ -25,7 +32,7 @@ export function DesignCard({ jobId, d, sub, onOpen }) {
       </div>
       <div className="info">
         <div style={{ fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>#{d.no} {d.gorsel_baslik || d.konu}</div>
-        <div className="small muted">{[d.tarih, d.platform, sub].filter(Boolean).join(' · ')}</div>
+        <div className="small muted">{[d.tarih, d.platform, sub, ready && engineLabel(d, v)].filter(Boolean).join(' · ')}</div>
       </div>
     </div>
   );
@@ -105,6 +112,7 @@ export function DesignModal({ jobId, designId, onClose, onNav }) {
             {d.kind === 'carousel' && <button className="btn sm" onClick={() => v.frames.forEach((x, i) => x.svg && setTimeout(() => download(`${D}/${v.key}/${i}.png?dl=1`), i * 400))}><Icon name="download" />Tüm slaytlar</button>}
             {f?.history?.length > 0 && <AsyncButton className="btn sm" onClick={() => api.post(`${D}/undo`, { variant: v.key, frame: v.frames.indexOf(f) })}><Icon name="undo" />Geri al ({f.history.length})</AsyncButton>}
             {d.variants.length > 1 && <span className="small muted">Aynı tasarım {d.variants.length} boyutta</span>}
+            {f?.svg && <span className="pill" title="Bu tasarımı üreten motor">{engineLabel(d, v)}</span>}
           </div>
           {v.error && <div className="err-box"><Icon name="alert" />{v.error}</div>}
         </div>

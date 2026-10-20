@@ -20,6 +20,8 @@ export const PROVIDERS = {
   higgsfield: { label: 'Higgsfield', kinds: ['görsel', 'video'], refs: false },
 };
 
+// Test ve vekil sunucu için değiştirilebilir
+const OPENAI_BASE = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/+$/, '');
 const cfg = (name) => store.getSettings(false).integrations[name] || {};
 
 export function isConnected(name) {
@@ -83,6 +85,7 @@ const impl = {
     for (const model of chain.slice(start)) {
       try {
         const out = await openaiOnce(c.apiKey, model, opts);
+        out.model = model;
         openaiWorking.set(c.model, model);
         if (model !== chain[0]) console.log(`OpenAI: ${chain[0]} kullanılamadı, ${model} ile üretildi.`);
         return out;
@@ -138,10 +141,10 @@ async function openaiOnce(apiKey, model, { prompt, width, height, refs = [], sig
     if (refs.length) {
       const form = new FormData();
       for (const [k, v] of Object.entries({ model, prompt, size, quality: 'high', n: '1' })) form.append(k, v);
-      refs.slice(0, 4).forEach((x, i) => form.append('image[]', new Blob([Buffer.from(x.data, 'base64')], { type: x.mime }), `ref-${i + 1}.${(x.mime.split('/')[1] || 'png').replace('jpeg', 'jpg')}`));
-      req = fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers, body: form, signal });
+      refs.slice(0, 6).forEach((x, i) => form.append('image[]', new Blob([Buffer.from(x.data, 'base64')], { type: x.mime }), `ref-${i + 1}.${(x.mime.split('/')[1] || 'png').replace('jpeg', 'jpg')}`));
+      req = fetch(`${OPENAI_BASE}/v1/images/edits`, { method: 'POST', headers, body: form, signal });
     } else {
-      req = fetch('https://api.openai.com/v1/images/generations', {
+      req = fetch(`${OPENAI_BASE}/v1/images/generations`, {
         method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, prompt, size, quality: 'high', n: 1 }), signal,
       });
@@ -184,7 +187,7 @@ export async function generate(provider, { prompt, width = 1080, height = 1350, 
   if (!isConnected(name)) throw new Error(`${PROVIDERS[name].label} bağlı değil. Ayarlar → Entegrasyonlar bölümünden API anahtarını girin.`);
   const out = await impl[name]({ prompt, width, height, refs, signal });
   store.logUsage({ kind: 'image', provider: name, images: out.length, imageCost: APPROX_COST[name] * out.length });
-  return { provider: name, images: out, cost: APPROX_COST[name] * out.length };
+  return { provider: name, model: out.model || '', images: out, cost: APPROX_COST[name] * out.length };
 }
 
 // Clipdrop: arka planı siler (şeffaf PNG)
@@ -235,7 +238,7 @@ export async function test(name) {
     if (bad) throw new Error(bad);
     const chain = openaiChain(c.model);
     for (const model of chain) {
-      const r = await fetch(`https://api.openai.com/v1/models/${encodeURIComponent(model)}`, { headers: { Authorization: `Bearer ${c.apiKey}` } });
+      const r = await fetch(`${OPENAI_BASE}/v1/models/${encodeURIComponent(model)}`, { headers: { Authorization: `Bearer ${c.apiKey}` } });
       if (r.status === 401) throw new Error('OpenAI anahtarı geçersiz ya da iptal edilmiş (HTTP 401). platform.openai.com/api-keys adresinden yeni anahtar oluştur.');
       if (r.status === 404) continue;
       await check(r, 'OpenAI');

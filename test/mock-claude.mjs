@@ -46,6 +46,12 @@ http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
   req.on('end', () => {
+    // Sahte OpenAI görsel API'si (GPT Image tasarım motoru testi)
+    if (req.url.startsWith('/v1/images/') || req.url.startsWith('/v1/models/')) {
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      res.writeHead(200, { 'content-type': 'application/json', 'x-edits': String(req.url.includes('edits')) });
+      return res.end(JSON.stringify(req.url.startsWith('/v1/models/') ? { id: req.url.split('/').pop() } : { data: [{ b64_json: png }] }));
+    }
     const j = JSON.parse(body || '{}');
     const last = j.messages?.[j.messages.length - 1];
     const sys = flat(j.system);

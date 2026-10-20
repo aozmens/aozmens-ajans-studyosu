@@ -559,6 +559,7 @@ app.delete('/api/jobs/:id', h((req) => {
 }));
 app.post('/api/jobs/:id/cancel', h((req) => orch.cancel(req.params.id)));
 app.post('/api/jobs/:id/resume', h((req) => orch.resume(req.params.id)));
+app.post('/api/jobs/:id/redesign', h((req) => orch.redesignAll(req.params.id, req.body?.engine)));
 app.post('/api/jobs/:id/save-to-folder', h((req) => {
   const job = store.getJob(req.params.id);
   if (!job) throw new Error('İş bulunamadı');

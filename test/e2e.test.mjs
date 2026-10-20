@@ -34,7 +34,7 @@ async function until(fn, ms = 60000) {
 
 before(async () => {
   procs.push(spawn(process.execPath, [path.join(ROOT, 'test/mock-claude.mjs'), String(MOCK)], { stdio: 'ignore' }));
-  procs.push(spawn(process.execPath, [path.join(ROOT, 'server/index.js')], { env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, APP_PASSWORD: '', ANTHROPIC_API_KEY: 'test' }, stdio: 'ignore' }));
+  procs.push(spawn(process.execPath, [path.join(ROOT, 'server/index.js')], { env: { ...process.env, PORT: String(PORT), DATA_DIR: DATA, APP_PASSWORD: '', ANTHROPIC_API_KEY: 'test', OPENAI_BASE_URL: `http://127.0.0.1:${MOCK}` }, stdio: 'ignore' }));
   await until(() => fetch(BASE + '/api/health').then((r) => r.ok).catch(() => false), 20000);
   await api('PUT', '/api/settings', { baseUrl: `http://127.0.0.1:${MOCK}`, designQa: 0 });
 });
@@ -207,4 +207,32 @@ test('web klon: sayfa, CSS ve görseller indirilir; Claude yeniden kurar', async
     const zip = (await api('GET', `/api/companies/${c.id}/webclone/${w.id}/export.zip`)).toString('latin1');
     assert.match(zip, /yeniden-kurulum\.html/);
   } finally { site.close(); }
+});
+
+test('GPT Image tasarım motoru: bitmiş görsel + gerçek logo, motor etiketi, Claude tasarımını GPT ile yeniden üretme', async () => {
+  await api('PUT', '/api/settings', { integrations: { openai: { apiKey: 'sk-proj-testtesttesttesttesttest01' } } });
+  const { id: cid } = await api('POST', '/api/companies', { name: 'GPT Marka', sector: 'Robotik' });
+  const { id } = await api('POST', '/api/jobs', {
+    companyId: cid, type: 'sosyal-medya-aylik', title: 'GPT',
+    options: { makeDesigns: true, formats: ['post', 'story'], postCount: 1, designEngine: 'gpt' },
+  });
+  const job = await until(async () => { const j = await api('GET', `/api/jobs/${id}`); return j.status !== 'running' && j; });
+  assert.equal(job.status, 'done', job.error);
+  const v = job.designs[0].variants;
+  assert.ok(v.every((x) => x.status === 'done' && x.frames[0].engine === 'gpt'), 'GPT motoruyla üretilmeli');
+  assert.match(v[0].frames[0].svg, /\{\{IMG:[\w-]+\}\}/);
+  assert.ok(job.usage.images >= 2, 'görsel sayısı işe yazılmalı');
+  const png = await api('GET', `/api/jobs/${id}/designs/${job.designs[0].id}/post/0.png`);
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  const c = await api('GET', `/api/companies/${cid}`);
+  assert.ok(c.files.some((f) => f.role === 'tasarim'), 'tasarım firma dosyalarına kaydedilmeli');
+
+  // İlk testteki Claude SVG işi GPT ile yeniden tasarlanır; eski tasarım geri alma geçmişinde kalır
+  const old = (await api('GET', '/api/jobs')).find((j) => j.title === 'Kasım');
+  await api('POST', `/api/jobs/${old.id}/redesign`, { engine: 'gpt' });
+  const re = await until(async () => { const j = await api('GET', `/api/jobs/${old.id}`); return j.status !== 'running' && j; });
+  assert.equal(re.status, 'done', re.error);
+  const f0 = re.designs[0].variants[0].frames[0];
+  assert.equal(f0.engine, 'gpt');
+  assert.ok(f0.history.length >= 1, 'eski tasarım geçmişte kalmalı');
 });

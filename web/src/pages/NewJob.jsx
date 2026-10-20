@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useApp, go } from '../App.jsx';
 import { Icon, Modal, toastErr } from '../ui.jsx';
 import { InspirationPicker } from './Inspiration.jsx';
+import { MockupPicker } from './BrandKit.jsx';
 
 const PLATFORMS = ['Instagram', 'Facebook', 'LinkedIn', 'TikTok', 'X', 'YouTube'];
 const monthName = (offset = 1) => {
@@ -33,11 +34,17 @@ export default function NewJob({ initial, onClose }) {
   const [useInspiration, setUseInspiration] = useState(true);
   const [inspirationIds, setInspirationIds] = useState(null);
   const [pickInsp, setPickInsp] = useState(false);
-  const [aiImages, setAiImages] = useState(false);
   const connected = meta.providers.filter((p) => p.connected);
-  const [imageProvider, setImageProvider] = useState(settings.imageProvider || connected[0]?.id || '');
+  const openaiOn = connected.some((p) => p.id === 'openai');
+  // Tasarım motoru: OpenAI bağlıysa varsayılan GPT Image (bitmiş görsel), değilse Claude (SVG)
+  const [engine, setEngine] = useState(openaiOn ? 'gpt' : 'claude');
+  const [aiImages, setAiImages] = useState(connected.length > 0);
+  const [imageProvider, setImageProvider] = useState((connected.find((p) => p.id === settings.imageProvider) || connected[0])?.id || '');
   const [tools, setTools] = useState([]);
   const [toolList, setToolList] = useState([]);
+  const [brandBook, setBrandBook] = useState(true);
+  const [bookMockups, setBookMockups] = useState(['hazir-kartvizit', 'hazir-uygulama', 'hazir-tabela']);
+  const [pickMock, setPickMock] = useState(false);
   const [busy, setBusy] = useState(false);
   const [agents, setAgents] = useState([]);
 
@@ -63,7 +70,8 @@ export default function NewJob({ initial, onClose }) {
       const options = {
         agents: selAgents, month: type === 'sosyal-medya-aylik' ? month : undefined, platforms, budget,
         makeDesigns, formats, postCount: +postCount, carouselCount: +carouselCount, slideCount: +slideCount,
-        useBrandProfile, useInspiration, inspirationIds: useInspiration ? insp : [], aiImages: makeDesigns && aiImages && !!imageProvider, imageProvider, tools,
+        useBrandProfile, useInspiration, inspirationIds: useInspiration ? insp : [], aiImages: makeDesigns && engine === 'claude' && aiImages && !!imageProvider, imageProvider, designEngine: makeDesigns && engine === 'gpt' && openaiOn ? 'gpt' : 'claude', tools,
+        brandBook, brandBookMockups: bookMockups,
       };
       const { id } = await api.post('/api/jobs', { companyId, type, title: title.trim() || autoTitle, request, options });
       loadJobs();
@@ -156,14 +164,22 @@ export default function NewJob({ initial, onClose }) {
                 <div className="field"><label>Bunlardan carousel</label><input className="input" type="number" min="0" max={postCount} value={carouselCount} onChange={(e) => setCarouselCount(e.target.value)} /></div>
                 <div className="field"><label>Carousel slayt sayısı</label><input className="input" type="number" min="2" max="10" value={slideCount} disabled={!+carouselCount} onChange={(e) => setSlideCount(e.target.value)} /></div>
               </div>
-              <div className="row">
-                <label className="check"><input type="checkbox" checked={aiImages} disabled={!connected.length} onChange={(e) => setAiImages(e.target.checked)} />Her tasarıma AI görsel üret</label>
+              <div className="field">
+                <label>Tasarım motoru</label>
+                <div className="seg" style={{ alignSelf: 'flex-start' }}>
+                  <button type="button" className={engine === 'gpt' ? 'on' : ''} disabled={!openaiOn} onClick={() => setEngine('gpt')}>GPT Image (bitmiş görsel)</button>
+                  <button type="button" className={engine === 'claude' ? 'on' : ''} onClick={() => setEngine('claude')}>Claude (SVG, düzenlenebilir)</button>
+                </div>
+                <span className="hint">{engine === 'gpt' ? 'Tasarımın tamamını OpenAI GPT Image çizer: ilham görselleri ve ürün fotoğrafı referans olarak gider, markanın gerçek logosu üstüne konur. Görsel başına ~0,17 $.' : 'Claude tasarımı SVG olarak çizer; yazılar ve yerleşim birebir düzenlenebilir. İstersen arka plan fotoğrafını AI üretir.'}{!openaiOn && ' GPT Image için Ayarlar → Entegrasyonlar → OpenAI anahtarını gir.'}</span>
+              </div>
+              {engine === 'claude' && <div className="row">
+                <label className="check"><input type="checkbox" checked={aiImages} disabled={!connected.length} onChange={(e) => setAiImages(e.target.checked)} />Her tasarıma AI arka plan görseli üret</label>
                 {connected.length ? (
                   <select className="select" style={{ width: 220 }} value={imageProvider} disabled={!aiImages} onChange={(e) => setImageProvider(e.target.value)}>
                     {connected.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                   </select>
                 ) : <span className="small muted">Görsel motoru bağlı değil (<a href="#/ayarlar/entegrasyonlar" onClick={onClose}>Ayarlar → Entegrasyonlar</a>).</span>}
-              </div>
+              </div>}
             </>
           )}
         </div>
@@ -182,6 +198,14 @@ export default function NewJob({ initial, onClose }) {
           </div>
         </div>
 
+        <div className="card pad stack">
+          <label className="check" style={{ fontWeight: 650 }}><input type="checkbox" checked={brandBook} onChange={(e) => setBrandBook(e.target.checked)} />Marka dosyası hazırla (PDF)</label>
+          <div className="row between">
+            <span className="small muted">{brandBook ? `Logo farklı zeminlerde, uygulama ikonu, yazı tipleri, renkler ve ${bookMockups.length} mockup; sonunda ajansın kurumsal alt bilgisi. Markanın "02 Marka Dosyası" klasörüne kaydedilir.` : 'Kapalı.'}{brandBook && company && !company.logoUrl ? ' Markanın logosu yok; dosya logosuz hazırlanır.' : ''}</span>
+            <button className="btn sm" disabled={!brandBook} onClick={() => setPickMock(true)}><Icon name="layers" />Mockup seç</button>
+          </div>
+        </div>
+
         {toolList.length > 0 && (
           <div className="field">
             <label>Prompt yazılacak dış araçlar <span className="faint" style={{ fontWeight: 400 }}>· her içerik için bu araçlara uygun prompt hazırlanır</span></label>
@@ -191,6 +215,11 @@ export default function NewJob({ initial, onClose }) {
           </div>
         )}
       </div>
+      {pickMock && (
+        <Modal size="wide" title="Marka dosyasındaki mockuplar" onClose={() => setPickMock(false)} footer={<button className="btn primary" onClick={() => setPickMock(false)}><Icon name="check" />Tamam ({bookMockups.length})</button>}>
+          <MockupPicker companyId={companyId} selected={bookMockups} onChange={setBookMockups} />
+        </Modal>
+      )}
       {pickInsp && (
         <Modal size="wide" title="İlham Al" onClose={() => setPickInsp(false)} footer={<button className="btn primary" onClick={() => setPickInsp(false)}><Icon name="check" />Tamam ({insp.length})</button>}>
           <InspirationPicker selected={insp} onChange={setInspirationIds} max={24} />

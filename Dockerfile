@@ -1,4 +1,4 @@
-# Ajans Stüdyosu: tek kapsayıcı (API + derlenmiş arayüz). Veriler /data diskinde kalır.
+# Agent-cy: tek kapsayıcı (API + derlenmiş arayüz). Veriler /data diskinde kalır.
 FROM node:22-slim AS web
 WORKDIR /app/web
 COPY web/package.json web/package-lock.json* ./
@@ -11,6 +11,8 @@ ENV NODE_ENV=production DATA_DIR=/data PORT=3000
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund
+# Web klonun "Claude Code (arka planda)" modu için
+RUN npm install -g @anthropic-ai/claude-code --no-audit --no-fund
 COPY server ./server
 COPY agents ./agents
 COPY assets ./assets

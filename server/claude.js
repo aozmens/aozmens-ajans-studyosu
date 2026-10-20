@@ -127,3 +127,16 @@ export async function call({ model, system, messages, maxTokens = 16000, onText,
   store.logUsage({ model: m, ...usage, ...tag });
   return { text, usage, stopReason: 'max_tokens' };
 }
+
+// Programın dışında çalışan bir Claude sürecinin (ör. arka planda açılan Claude Code) kullanımını günlüğe yazar
+export function logExternal({ usage = {}, cost, model = 'claude-code', tag = {} }) {
+  const u = {
+    input: usage.input_tokens || 0,
+    output: usage.output_tokens || 0,
+    cacheRead: usage.cache_read_input_tokens || 0,
+    cacheWrite: usage.cache_creation_input_tokens || 0,
+  };
+  u.cost = Number.isFinite(+cost) ? +cost : costOf(store.getSettings(false).model, u);
+  store.logUsage({ model, ...u, ...tag });
+  return u;
+}

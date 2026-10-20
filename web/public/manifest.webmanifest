@@ -1,0 +1,12 @@
+{
+  "name": "Agent-cy",
+  "short_name": "Agent-cy",
+  "lang": "tr",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0E0E12",
+  "theme_color": "#FF0A63",
+  "icons": [
+    { "src": "/agent-cy-ikon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}

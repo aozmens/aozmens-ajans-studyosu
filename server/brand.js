@@ -101,12 +101,18 @@ export async function analyzeInspiration(sid) {
       model: settings().designModel || settings().model,
       system: systemFor('grafik-tasarimci', '', true),
       messages: [{ role: 'user', content: [img, { type: 'text', text: `# Görevin: bu ilham görselini tara ve prompta dönüştür
-Bu görsel ajansın ilham kaynağı. Görseli bir görsel üretim modeline (Flux, Midjourney, Gemini, GPT Image) neredeyse aynı estetikte yeniden ürettirecek kadar ayrıntılı çöz. İçeriğin kendisini değil, estetiği yakala: ortam, ışık, kamera, lens, renk derecelendirmesi, doku, kompozisyon, tipografi tarzı (varsa), grafik öğeler.
+Bu görsel ajansın ilham kaynağı. Görseli bir görsel üretim modeline (Flux, Midjourney, Gemini, GPT Image) piksel piksel neredeyse aynısını ürettirecek kadar ayrıntılı çöz: tuvali bir ızgara gibi düşün ve her bölgede ne olduğunu, oranlarını (yüzde), renklerini (HEX), ışığın yönünü ve sertliğini, kamera açısını ve lensini, derinlik ve bulanıklığı, dokuyu, renk derecelendirmesini, grafik öğeleri ve tipografinin tarzını yaz.
+
+Ayrıca kompozisyonun kahramanı olan ürünü / ana nesneyi ayrı tarif et (subject): ne olduğu, tuvaldeki konumu ve kapladığı alan (yüzde), açısı, malzemesi, renkleri, üzerindeki ışık ve yansımalar, gölgesi. Bu tarif başka bir firmanın ürünüyle değiştirilecek; o yüzden kompozisyonu ve ışığı koruyup ürünü değiştirmeyi kolaylaştıracak şekilde yaz.
+
+Görselde yazı varsa yazı tiplerini tahmin et ve programdaki en yakın karşılığı yalnızca şu listeden seç: ${render.fontNames().join(', ')}.
 
 Yanıtın yalnızca şu JSON olsun:
 \`\`\`json
 {
-  "prompt": "İngilizce, 60-120 kelimelik, bu görseli yeniden üretecek tam prompt",
+  "prompt": "İngilizce, 120-220 kelimelik, bu görseli piksel piksel yeniden üretecek tam prompt",
+  "subject": "İngilizce, 40-90 kelime: ana ürün / nesne, konumu (%), ölçeği, açısı, malzemesi, ışığı, gölgesi",
+  "subjectPlacement": "Türkçe kısa: ürünün yeri ve kapladığı alan (ör. ortada, alt üçte birde, tuvalin %45'i)",
   "styleSuffix": "İngilizce, 15-30 kelimelik, başka bir konuya eklenince aynı estetiği verecek stil eki (konu içermesin)",
   "negative": "İngilizce negatif prompt",
   "medium": "fotoğraf | 3B render | illüstrasyon | grafik tasarım | karışık",
@@ -115,18 +121,21 @@ Yanıtın yalnızca şu JSON olsun:
   "composition": "Türkçe kompozisyon tanımı",
   "mood": "Türkçe ruh hâli",
   "typography": "Görselde yazı varsa Türkçe tipografi tarzı, yoksa boş",
+  "fonts": [{ "rol": "başlık | gövde | etiket", "tahmin": "yazı tipi tahmini", "stil": "Türkçe kısa tarif", "programFontu": "listeden aile" }],
   "palette": ["#HEX", "#HEX", "#HEX", "#HEX"],
   "tags": ["kısa", "türkçe", "etiketler"]
 }
 \`\`\`` }] }],
-      maxTokens: 4000,
+      maxTokens: 5000,
       tag: { agent: 'grafik-tasarimci', kind: 'ilham-tara' },
     });
     const out = extractJson(r.text);
     s.analysis = {
-      prompt: String(out.prompt || ''), styleSuffix: String(out.styleSuffix || ''), negative: String(out.negative || ''),
+      prompt: String(out.prompt || ''), subject: String(out.subject || ''), subjectPlacement: String(out.subjectPlacement || ''),
+      styleSuffix: String(out.styleSuffix || ''), negative: String(out.negative || ''),
       medium: out.medium || '', style: out.style || '', lighting: out.lighting || '', composition: out.composition || '',
       mood: out.mood || '', typography: out.typography || '', palette: (out.palette || []).filter((h) => /^#[0-9a-f]{3,8}$/i.test(h)).slice(0, 6),
+      fonts: (Array.isArray(out.fonts) ? out.fonts : []).slice(0, 4).map((f) => ({ rol: String(f.rol || ''), tahmin: String(f.tahmin || ''), stil: String(f.stil || ''), programFontu: render.fontNames().includes(f.programFontu) ? f.programFontu : 'Inter' })),
       tags: (out.tags || []).slice(0, 8),
     };
     s.analyzedAt = store.now();
@@ -157,24 +166,40 @@ export async function analyzeMany(ids) {
 
 // ---------------- Görsel Stüdyosu: ilhamdan prompt yaz, görsel üret ----------------
 
-export async function composeImagePrompt({ companyId, inspirationIds = [], subject, width = 1080, height = 1350, useBrandProfile = true }) {
+// Ürün odaklı prompt: ilhamın kompozisyonu ve ışığı korunur, kahraman ürün firmanın ürünüyle (görseli varsa onun piksel
+// tarifiyle, yoksa kullanıcının tarifiyle) değiştirilir.
+export async function composeImagePrompt({ companyId, inspirationIds = [], subject, productFileId, productDescription = '', width = 1080, height = 1350, useBrandProfile = true }) {
   const c = companyId ? store.getCompany(companyId) : null;
   const all = store.getAgency().styles;
   const insp = inspirationIds.map((x) => all.find((s) => s.id === x)).filter((s) => s?.analysis?.prompt);
+  let product = productFileId ? c?.files.find((f) => f.id === productFileId) : null;
+  if (product && !product.analysis?.prompt) {
+    try { product = await analyzeProduct(c.id, product.id); } catch {}
+  }
   const content = [];
   for (const s of insp.slice(0, 3)) {
     try { content.push({ type: 'text', text: `İlham görseli: ${s.name}` }, await render.imageBlockFromFile(store.assetPath(store.AGENCY_ID, s.file), 1000)); } catch {}
   }
+  if (product) {
+    try { content.push({ type: 'text', text: `Firmanın ürün görseli: ${product.name}` }, await render.imageBlockFromFile(store.assetPath(c.id, product.designFile || product.file), 1000)); } catch {}
+  }
+  const productText = product
+    ? `# Firmanın ürünü (ekteki ürün görseli)\n${product.analysis?.prompt ? `Piksel tarifi: ${product.analysis.prompt}` : 'Ekteki ürün görselini piksel piksel tarif ederek kullan.'}\nİlhamdaki ana ürünü bu ürünle değiştir: biçimini, rengini, malzemesini, etiketini ve oranlarını birebir koru; ilhamın kompozisyonu, ışığı ve kamera açısı aynen kalsın.`
+    : productDescription.trim()
+      ? `# Firmanın ürünü (görseli yok, tarif edildi)\n${productDescription.trim()}\nİlhamdaki ana ürünü bu tarife göre yeniden kur: ürünün biçimini, malzemesini, renklerini ve ölçeğini tariften çıkar, eksik ayrıntıları markaya uygun şekilde tamamla; kompozisyon ve ışık ilhamdan gelsin.`
+      : '';
   content.push({ type: 'text', text: `${c ? companyBrief(c, { steps: [], options: { useBrandProfile } }) : ''}
 
-${insp.length ? `# İlham promptları\n${insp.map((s, i) => `${i + 1}. ${s.analysis.prompt}\n   Stil eki: ${s.analysis.styleSuffix}`).join('\n')}` : ''}
+${insp.length ? `# İlham promptları\n${insp.map((s, i) => `${i + 1}. ${s.analysis.prompt}\n   Ana ürün / kompozisyon: ${s.analysis.subject || '-'} (${s.analysis.subjectPlacement || ''})\n   Stil eki: ${s.analysis.styleSuffix}`).join('\n')}` : ''}
+
+${productText}
 
 # İstenen görsel
-${subject}
+${subject || (product || productDescription ? 'İlhamın kompozisyonunda firmanın ürünü' : '')}
 Oran: ${width}x${height}
 
 # Görevin
-Bu görsel için bir görsel üretim modeline gidecek tek bir İngilizce prompt yaz. İlham görsellerinin estetiğini (ışık, kamera, renk derecelendirmesi, doku, kompozisyon) birebir taşı; konuyu istenen görsele göre kur; marka renklerini ve marka profilindeki görsel anahtar kelimeleri işle. 70-130 kelime, çok somut. Görselin üzerine sonradan başlık konacaksa kompozisyonda boş alan bırak. Sonda "no text, no logo, no watermark" ekle (kullanıcı yazı istemediyse).
+Bu görsel için bir görsel üretim modeline gidecek tek bir İngilizce prompt yaz. İlham görsellerinin estetiğini (ışık, kamera, renk derecelendirmesi, doku, kompozisyon) birebir taşı; konuyu istenen görsele göre kur; marka renklerini ve marka profilindeki görsel anahtar kelimeleri işle. ${productText ? 'Ürün kompozisyonun kahramanı: ürünün tarifini piksel ayrıntısında (konum %, ölçek, açı, malzeme, ışık, gölge) yaz. ' : ''}90-180 kelime, çok somut. Görselin üzerine sonradan başlık konacaksa kompozisyonda boş alan bırak. Sonda "no text, no logo, no watermark" ekle (kullanıcı yazı istemediyse).
 Yanıtın yalnızca şu JSON olsun:
 \`\`\`json
 { "prompt": "...", "negative": "...", "aciklama": "Türkçe, tek cümle: neyi nasıl birleştirdin" }
@@ -187,15 +212,44 @@ Yanıtın yalnızca şu JSON olsun:
     tag: { companyId, agent: 'grafik-tasarimci', kind: 'gorsel-prompt' },
   });
   const out = extractJson(r.text);
-  return { prompt: out.prompt || '', negative: out.negative || '', note: out.aciklama || '', usage: r.usage };
+  return { prompt: out.prompt || '', negative: out.negative || '', note: out.aciklama || '', usage: r.usage, productFileId: product?.id || null };
 }
 
-export async function generateImages({ companyId, prompt, provider, width = 1080, height = 1350, count = 1, inspirationIds = [], role = 'arkaplan' }) {
+// Firmanın ürün görselini piksel piksel tarif eder (ürün değiştirme ve mockuplar için)
+export async function analyzeProduct(companyId, fid) {
+  const c = store.getCompany(companyId);
+  const f = c?.files.find((x) => x.id === fid);
+  if (!f || !/^image\//.test(f.mime || '')) throw new Error('Ürün görseli bulunamadı');
+  const img = await render.imageBlockFromFile(store.assetPath(c.id, f.designFile || f.file), 1200);
+  const r = await claude.call({
+    model: settings().designModel || settings().model,
+    system: systemFor('grafik-tasarimci', '', true),
+    messages: [{ role: 'user', content: [img, { type: 'text', text: `# Görevin: ürünü tara
+Bu görsel ${c.name} firmasının ürünü. Bir görsel üretim modeli bu ürünü başka bir sahnede birebir aynı çizebilsin diye ürünü piksel piksel tarif et: tür, biçim ve oranlar (en/boy/derinlik oranı), malzeme ve yüzey (mat, parlak, cam, metal…), renkler (HEX), etiket / ambalaj üzerindeki grafikler ve yazıların yerleşimi, kapak, detaylar, mevcut ışık ve gölge. Arka planı tarif etme.
+Yanıtın yalnızca şu JSON olsun:
+\`\`\`json
+{ "ad": "Türkçe ürün adı", "prompt": "İngilizce, 60-140 kelime piksel piksel ürün tarifi", "malzeme": "Türkçe", "renkler": ["#HEX"], "notlar": "Türkçe kısa: dikkat edilecekler" }
+\`\`\`` }] }],
+    maxTokens: 3000,
+    tag: { companyId, agent: 'grafik-tasarimci', kind: 'urun-tara' },
+  });
+  const out = extractJson(r.text);
+  f.analysis = { ad: String(out.ad || ''), prompt: String(out.prompt || ''), malzeme: String(out.malzeme || ''), renkler: (out.renkler || []).filter((h) => /^#[0-9a-f]{3,8}$/i.test(h)), notlar: String(out.notlar || ''), at: store.now() };
+  store.flush();
+  send('company:update', { id: companyId });
+  return f;
+}
+
+export async function generateImages({ companyId, prompt, provider, width = 1080, height = 1350, count = 1, inspirationIds = [], role = 'arkaplan', productFileId }) {
   const c = store.getCompany(companyId);
   if (!c) throw new Error('Önce bir marka seçin; üretilen görseller markanın dosyalarına eklenir.');
   if (!String(prompt || '').trim()) throw new Error('Prompt boş');
   const refs = [];
-  const p = provider || settings().imageProvider || imagegen.connected()[0];
+  const p = provider || imagegen.defaultProvider();
+  const product = productFileId ? c.files.find((f) => f.id === productFileId) : null;
+  if (p && imagegen.PROVIDERS[p]?.refs && product) {
+    try { const b = await render.imageBlockFromFile(store.assetPath(c.id, product.designFile || product.file), 1024); refs.push({ mime: b.source.media_type, data: b.source.data }); } catch {}
+  }
   if (p && imagegen.PROVIDERS[p]?.refs) {
     const all = store.getAgency().styles;
     for (const sid of inspirationIds.slice(0, 3)) {
@@ -204,7 +258,9 @@ export async function generateImages({ companyId, prompt, provider, width = 1080
       try { const b = await render.imageBlockFromFile(store.assetPath(store.AGENCY_ID, s.file), 1024); refs.push({ mime: b.source.media_type, data: b.source.data }); } catch {}
     }
   }
-  const finalPrompt = refs.length ? `Use the attached reference images only for style, lighting and color mood; do not copy their subjects. ${prompt}` : prompt;
+  const finalPrompt = !refs.length ? prompt
+    : product ? `The first attached image is the client's product: reproduce that exact product (shape, label, colors, proportions). Use the other attached images only for composition, style, lighting and color mood; do not copy their subjects. ${prompt}`
+      : `Use the attached reference images only for style, lighting and color mood; do not copy their subjects. ${prompt}`;
   const out = [];
   for (let i = 0; i < Math.max(1, Math.min(4, count)); i++) {
     const r = await imagegen.generate(p, { prompt: finalPrompt, width, height, refs });

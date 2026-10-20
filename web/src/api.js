@@ -42,7 +42,7 @@ let es = null;
 export function connectEvents() {
   if (es) return;
   es = new EventSource('/api/events');
-  for (const ch of ['job:update', 'job:stream', 'company:update', 'agency:update', 'tool:update', 'toast']) {
+  for (const ch of ['job:update', 'job:stream', 'company:update', 'agency:update', 'tool:update', 'toast', 'webclone:update']) {
     es.addEventListener(ch, (e) => {
       let d = null;
       try { d = JSON.parse(e.data); } catch { return; }

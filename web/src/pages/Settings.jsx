@@ -1,8 +1,8 @@
 // Ayarlar: Claude bağlantısı ve modeller, görsel/video entegrasyonları, görünüm, genel, yedek ve sürüm.
 import React, { useState } from 'react';
-import { api, download } from '../api.js';
+import { api, download, readAsDataUrl } from '../api.js';
 import { useApp, go } from '../App.jsx';
-import { Icon, AsyncButton, toast } from '../ui.jsx';
+import { Icon, AsyncButton, FilePick, toast } from '../ui.jsx';
 
 const MODELS = [['claude-opus-5-5', 'Claude Opus 5.5 (en güçlü)'], ['claude-sonnet-5-5', 'Claude Sonnet 5.5 (hızlı, dengeli)'], ['claude-haiku-5-5', 'Claude Haiku 5.5 (en ucuz)'], ['claude-fable-5-1', 'Claude Fable 5.1']];
 const EFFORTS = [['low', 'Düşük'], ['medium', 'Orta (önerilen)'], ['high', 'Yüksek'], ['xhigh', 'Çok yüksek'], ['max', 'En yüksek']];
@@ -11,14 +11,14 @@ const SECTIONS = [['claude', 'Claude', 'brain'], ['entegrasyonlar', 'Entegrasyon
 const PROV_FIELDS = {
   clipdrop: [['apiKey', 'API anahtarı', true]],
   fal: [['apiKey', 'API anahtarı (FAL_KEY)', true], ['model', 'Model', false, 'fal-ai/flux-pro/v1.1-ultra']],
-  openai: [['apiKey', 'API anahtarı', true], ['model', 'Model', false, 'gpt-image-1']],
+  openai: [['apiKey', 'API anahtarı', true, 'sk-proj-…'], ['model', 'Model', false, 'gpt-image-2.5-flare']],
   gemini: [['apiKey', 'API anahtarı', true], ['model', 'Model', false, 'gemini-2.5-flash-image']],
   higgsfield: [['keyId', 'API Key ID', true], ['secret', 'API Key Secret', true], ['imageModel', 'Görsel modeli', false, 'higgsfield-ai/soul/v2/standard'], ['videoModel', 'Video modeli (görselden video)', false, 'ör. higgsfield-ai/dop/standard'], ['extra', 'Ek parametreler (JSON)', false, '{"resolution":"720p"}']],
 };
 const PROV_HELP = {
   clipdrop: 'clipdrop.co/apis → API key. Metinden görsel, arka plan silme ve büyütme.',
   fal: 'fal.ai/dashboard/keys. Flux Pro Ultra ile fotoğraf gerçekçiliğinde görseller.',
-  openai: 'platform.openai.com/api-keys. GPT Image.',
+  openai: 'platform.openai.com/api-keys. Varsayılan GPT Image 2.5 Flare; seçilen model hesapta yoksa sıradaki modele otomatik geçilir. Ürün ve logo görselleri referans olarak gider.',
   gemini: 'aistudio.google.com/apikey. Nano Banana; ilham görsellerini referans olarak da kullanır.',
   higgsfield: 'cloud.higgsfield.ai → API keys. Görsel ve görselden video (Reels).',
 };
@@ -95,7 +95,11 @@ export default function Settings({ section = 'claude' }) {
                     {PROV_FIELDS[p.id].map(([k, l, secret, ph]) => (
                       <div key={k} className="field">
                         <label>{l}</label>
-                        <input className="input mono" type={secret ? 'password' : 'text'} placeholder={ph} value={s.integrations[p.id]?.[k] || ''} onChange={(e) => setInt(p.id, { [k]: e.target.value })} />
+                        {p.id === 'openai' && k === 'model' && meta.openaiModels ? (
+                          <select className="select" value={s.integrations.openai?.model || meta.openaiModels[0][0]} onChange={(e) => setInt('openai', { model: e.target.value })}>
+                            {[...meta.openaiModels, ...(meta.openaiModels.some(([id]) => id === s.integrations.openai?.model) || !s.integrations.openai?.model ? [] : [[s.integrations.openai.model, s.integrations.openai.model]])].map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                          </select>
+                        ) : <input className="input mono" type={secret ? 'password' : 'text'} placeholder={ph} value={s.integrations[p.id]?.[k] || ''} onChange={(e) => setInt(p.id, { [k]: e.target.value })} />}
                         {s.integrations[p.id]?.[k + 'FromEnv'] && <span className="hint">Ortam değişkeninden okunuyor.</span>}
                       </div>
                     ))}
@@ -118,6 +122,19 @@ export default function Settings({ section = 'claude' }) {
               <div className="card pad stack">
                 <h3>Ajans</h3>
                 <div className="field"><label>Ajans adı</label><input className="input" value={s.agencyName} onChange={(e) => set({ agencyName: e.target.value })} /></div>
+                <span className="small muted">Marka dosyası ve tasarım dili PDF'lerinin son sayfasında logo, iletişim bilgileri ve "© {new Date().getFullYear()} {s.agencyName}. All Rights Reserved." yer alır.</span>
+                <div className="grid-2">
+                  <div className="field"><label>Web sitesi</label><input className="input" placeholder="agent-cy.com" value={s.agencyWebsite || ''} onChange={(e) => set({ agencyWebsite: e.target.value })} /></div>
+                  <div className="field"><label>E-posta</label><input className="input" placeholder="info@agent-cy.com" value={s.agencyEmail || ''} onChange={(e) => set({ agencyEmail: e.target.value })} /></div>
+                  <div className="field"><label>Telefon</label><input className="input" value={s.agencyPhone || ''} onChange={(e) => set({ agencyPhone: e.target.value })} /></div>
+                  <div className="field"><label>Adres</label><input className="input" value={s.agencyAddress || ''} onChange={(e) => set({ agencyAddress: e.target.value })} /></div>
+                </div>
+                <div className="row">
+                  <div className="logo-sq" style={{ width: 120, height: 48, background: '#111' }}><img src={s.agencyLogo ? `/api/settings/agency-logo.png?v=${encodeURIComponent(s.agencyLogo)}` : '/agent-cy-logo.png'} alt="" style={{ objectFit: 'contain' }} /></div>
+                  <FilePick className="btn sm" accept="image/*,.svg" onFiles={async ([f]) => { const n = await api.post('/api/settings/agency-logo', { dataUrl: await readAsDataUrl(f) }); setSettings(n); setS(n); toast('Ajans logosu kaydedildi'); }}><Icon name="upload" />PDF'ler için logo yükle</FilePick>
+                  {s.agencyLogo && <AsyncButton className="btn sm ghost" onClick={async () => { const n = await api.post('/api/settings/agency-logo', {}); setSettings(n); setS(n); }}>Agent-cy logosuna dön</AsyncButton>}
+                  <span className="small muted">Koyu zemin üzerinde durur; açık renk ya da şeffaf zeminli logo önerilir.</span>
+                </div>
               </div>
               <div className="card pad stack">
                 <h3>Yedek</h3>
@@ -126,7 +143,7 @@ export default function Settings({ section = 'claude' }) {
               </div>
               <div className="card pad stack">
                 <h3>Sürüm</h3>
-                <span className="small muted">Ajans Stüdyosu {meta.version}{meta.commit ? ` · ${meta.commit}` : ''}. GitHub'daki main dalına gelen her değişiklik sunucuya otomatik yüklenir.</span>
+                <span className="small muted">Agent-cy {meta.version}{meta.commit ? ` · ${meta.commit}` : ''}. {meta.desktop ? 'Bilgisayar sürümü; yeni sürüm için yeni zip\'i çıkarıp Agent-cy.exe\'yi aç (veriler Belgeler\\Agent-cy\'de kalır).' : 'GitHub\'daki main dalına gelen her değişiklik sunucuya otomatik yüklenir.'}</span>
                 <button className="btn" style={{ alignSelf: 'flex-start' }} onClick={async () => { await api.post('/api/logout'); location.reload(); }}><Icon name="logout" />Çıkış yap</button>
               </div>
             </>

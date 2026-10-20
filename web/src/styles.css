@@ -1,4 +1,4 @@
-/* Ajans Stüdyosu 3 - tasarım sistemi */
+/* Agent-cy 3 - tasarım sistemi */
 @font-face { font-family: 'InterUI'; font-weight: 400; font-display: swap; src: url(/fonts/Inter-400.ttf) format('truetype'); }
 @font-face { font-family: 'InterUI'; font-weight: 500; font-display: swap; src: url(/fonts/Inter-500.ttf) format('truetype'); }
 @font-face { font-family: 'InterUI'; font-weight: 600; font-display: swap; src: url(/fonts/Inter-600.ttf) format('truetype'); }
@@ -67,7 +67,7 @@ code { font-family: 'Cascadia Code', Consolas, ui-monospace, monospace; font-siz
 .app { display: flex; height: 100%; overflow: hidden; }
 .sidebar { width: var(--side-w); flex: none; background: var(--surface-2); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 14px 12px; gap: 6px; overflow: hidden; }
 .brand { display: flex; gap: 10px; align-items: center; padding: 4px 6px 12px; }
-.brand-mark { width: 34px; height: 34px; border-radius: 10px; flex: none; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; background: linear-gradient(140deg, #8b7bff 0%, #5b4cf0 45%, #d24fd0 100%); box-shadow: 0 6px 16px -6px rgba(91, 76, 240, .6); }
+.brand-mark { width: 34px; height: 34px; border-radius: 10px; flex: none; display: block; object-fit: contain; }
 .brand-name { font-weight: 700; letter-spacing: -.01em; }
 .brand-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search-trigger { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); background: var(--surface); border-radius: 9px; color: var(--muted); font-size: 13px; margin-bottom: 6px; }

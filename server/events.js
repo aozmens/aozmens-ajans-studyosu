@@ -17,6 +17,8 @@ export function handler(req, res) {
   });
 }
 
+export const clientCount = () => clients.size;
+
 export function send(channel, payload) {
   const data = `event: ${channel}\ndata: ${JSON.stringify(payload)}\n\n`;
   for (const c of clients) c.write(data);

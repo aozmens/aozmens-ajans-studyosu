@@ -6,6 +6,14 @@ const svg = (w, h, title) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w
 
 function reply(text) {
   const t = text;
+  if (/Görevin: tasarım dili çıkar/.test(t)) {
+    return '```json\n{"ad":"Sinematik Gece","ozet":"Koyu, sinematik ve ürün odaklı.","masterPrompt":"Cinematic product shot of [SUBJECT], centered, 85mm, moody rim light, #111111 background","styleSuffix":"cinematic moody rim light","negative":"blurry, text","palette":[{"name":"Gece","hex":"#111111","role":"zemin","oran":"%60"},{"name":"Kırmızı","hex":"#C8102E","role":"vurgu","oran":"%10"}],"fonts":[{"rol":"Başlık","tahmin":"Futura","stil":"geometrik","program":"Montserrat","agirlik":800,"boyut":"96 px","harfAraligi":"-2 px","satirAraligi":"1.05"}],"kompozisyon":["Ürün ortada, tuvalin %45i"],"isik":"Arkadan kenar ışığı","kamera":"85mm, göz hizası","doku":"mat","grafikOgeler":["hap düğme"],"yapilacaklar":["Boşluk bırak"],"yapilmayacaklar":["Kalabalık zemin"]}\n```';
+  }
+  if (/Görevin: mockup dosyasını tara/.test(t)) return '```json\n{"ad":"Kupa","kategori":"Ürün","alan":{"x":0.3,"y":0.3,"w":0.4,"h":0.3},"yuzey":"acik","karisim":"multiply","perspektif":"hafif kavisli","prompt":"white ceramic mug on oak table, [LOGO] printed on the front"}\n```';
+  if (/Görevin: mockup promptu yaz/.test(t)) return '```json\n{"prompt":"business card mockup with the logo","negative":"blurry","aciklama":"tamam"}\n```';
+  if (/Görevin: marka dosyası metinleri/.test(t)) return '```json\n{"ozet":"Sıcak ve güvenilir bir kahve markası.","logoKurallari":["Koruma alanı bırak"],"yanlisKullanim":["Esnetme"],"ikonNotu":"İkon sade.","fontNotu":"İki aile.","renkKullanimi":{}}\n```';
+  if (/Görevin: ürünü tara/.test(t)) return '```json\n{"ad":"Kahve paketi","prompt":"matte kraft coffee bag, red label","malzeme":"kraft kağıt","renkler":["#C8102E"],"notlar":"etiket ortada"}\n```';
+  if (/Görevin: sayfayı yeniden kur/.test(t)) return '<!doctype html><html><head><title>Klon</title></head><body><h1>Yeniden kurulum</h1></body></html>';
   if (/Görevin: iş planı/.test(t)) {
     return 'Kısa değerlendirme: brif ve konsept yeterli.\n```json\n{"ozet":"Test planı","varsayimlar":["test"],"adimlar":[{"ajan":"musteri-temsilcisi","baslik":"Brif","gorev":"Brif yaz"},{"ajan":"kreatif-direktor","baslik":"Konsept","gorev":"Konsept yaz"},{"ajan":"seo-uzmani","baslik":"İlgisiz","gorev":"Olmamalı"}]}\n```';
   }
@@ -38,6 +46,12 @@ http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
   req.on('end', () => {
+    // Sahte OpenAI görsel API'si (GPT Image tasarım motoru testi)
+    if (req.url.startsWith('/v1/images/') || req.url.startsWith('/v1/models/')) {
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      res.writeHead(200, { 'content-type': 'application/json', 'x-edits': String(req.url.includes('edits')) });
+      return res.end(JSON.stringify(req.url.startsWith('/v1/models/') ? { id: req.url.split('/').pop() } : { data: [{ b64_json: png }] }));
+    }
     const j = JSON.parse(body || '{}');
     const last = j.messages?.[j.messages.length - 1];
     const sys = flat(j.system);

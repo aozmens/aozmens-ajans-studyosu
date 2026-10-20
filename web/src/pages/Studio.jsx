@@ -1,8 +1,8 @@
 // Görsel stüdyosu: ilham promptlarından marka uyumlu prompt yaz, bağlı görsel motorlarıyla üret.
 import React, { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api, filesToItems } from '../api.js';
 import { useApp, go } from '../App.jsx';
-import { Icon, Modal, AsyncButton, UsageLine, Empty, copy, toast } from '../ui.jsx';
+import { Icon, Modal, AsyncButton, UsageLine, Empty, FilePick, copy, toast } from '../ui.jsx';
 import { InspirationPicker } from './Inspiration.jsx';
 
 const SIZES = [['1080x1350', 'Post 4:5'], ['1080x1080', 'Kare 1:1'], ['1080x1920', 'Story 9:16'], ['1200x628', 'Yatay 1.91:1'], ['1600x900', 'Geniş 16:9']];
@@ -18,11 +18,17 @@ export default function Studio() {
   const [prompt, setPrompt] = useState('');
   const [note, setNote] = useState('');
   const [usage, setUsage] = useState(null);
-  const [provider, setProvider] = useState(settings.imageProvider || connected[0]?.id || '');
+  const [provider, setProvider] = useState((connected.find((p) => p.id === settings.imageProvider) || connected[0])?.id || '');
   const [count, setCount] = useState(1);
   const [useBrandProfile, setUseBrandProfile] = useState(true);
   const [results, setResults] = useState([]);
   const [pick, setPick] = useState(false);
+  const [productId, setProductId] = useState('');
+  const [productDesc, setProductDesc] = useState('');
+  const [detail, setDetail] = useState(null);
+  useEffect(() => { setProductId(''); if (companyId) api.get(`/api/companies/${companyId}`).then(setDetail).catch(() => {}); }, [companyId]);
+  const products = (detail?.files || []).filter((f) => f.role === 'urun' && /^image\//.test(f.mime || ''));
+  const product = products.find((f) => f.id === productId);
   const [w, h] = size.split('x').map(Number);
   useEffect(() => { if (!insp.length && company?.inspirationIds?.length) setInsp(company.inspirationIds.slice(0, 3)); }, [companyId]);
 
@@ -50,10 +56,30 @@ export default function Studio() {
             <label className="row between">İlham ({insp.length})<button className="btn sm" onClick={() => setPick(true)}><Icon name="sparkles" />İlham Al</button></label>
             {insp.length ? <span className="small muted">Seçilen ilhamların ışığı, kamerası, renk derecelendirmesi ve kompozisyonu taşınır.</span> : <span className="small muted">İlham seçmezsen prompt yalnızca marka profilinden yazılır.</span>}
           </div>
+          <div className="field">
+            <label className="row between">Ürün <span className="small muted" style={{ fontWeight: 400 }}>ilhamın ana ürünü bununla değişir</span></label>
+            <div className="row">
+              <select className="select grow" value={productId} onChange={(e) => setProductId(e.target.value)}>
+                <option value="">Ürün görseli yok (tarif et)</option>
+                {products.map((f) => <option key={f.id} value={f.id}>{f.analysis?.ad || f.name}</option>)}
+              </select>
+              <FilePick className="btn" accept="image/*" onFiles={async (files) => {
+                const r = await api.post(`/api/companies/${companyId}/files`, { items: await filesToItems(files), role: 'urun' });
+                const d = await api.get(`/api/companies/${companyId}`);
+                setDetail(d); setProductId(r.added[0]); toast('Ürün görseli eklendi; piksel piksel taranıyor');
+              }}><Icon name="upload" />Ürün yükle</FilePick>
+            </div>
+            {product ? (
+              <div className="row" style={{ alignItems: 'flex-start' }}>
+                <img src={product.url} alt="" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, background: 'var(--surface-2)' }} />
+                {product.analysis?.prompt ? <div className="prompt-box grow" style={{ maxHeight: 90 }}>{product.analysis.prompt}</div> : <span className="small muted">Prompt yazılırken ürün taranır.</span>}
+              </div>
+            ) : <textarea className="textarea" style={{ minHeight: 60 }} placeholder="Ürün yoksa tarif et: ör. 250 g mat siyah kraft kahve paketi, ön yüzde kırmızı etiket" value={productDesc} onChange={(e) => setProductDesc(e.target.value)} />}
+          </div>
           <div className="field"><label>Ne görmek istiyorsun?</label><textarea className="textarea" placeholder="ör. Mermer tezgâhta latte, sabah ışığı, sağda başlık için boşluk" value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
           <label className="check"><input type="checkbox" checked={useBrandProfile} onChange={(e) => setUseBrandProfile(e.target.checked)} />Marka profilini kullan</label>
-          <AsyncButton className="btn primary" disabled={!subject.trim()} busyText="Prompt yazılıyor…" onClick={async () => {
-            const r = await api.post('/api/studio/prompt', { companyId, inspirationIds: insp, subject, width: w, height: h, useBrandProfile });
+          <AsyncButton className="btn primary" disabled={!subject.trim() && !productId && !productDesc.trim()} busyText="Prompt yazılıyor…" onClick={async () => {
+            const r = await api.post('/api/studio/prompt', { companyId, inspirationIds: insp, subject, width: w, height: h, useBrandProfile, productFileId: productId || undefined, productDescription: productId ? '' : productDesc });
             setPrompt(r.prompt); setNote(r.note); setUsage(r.usage);
           }}><Icon name="sparkles" />Prompt yaz</AsyncButton>
           <div className="field">
@@ -66,7 +92,7 @@ export default function Studio() {
               <select className="select" style={{ width: 220 }} value={provider} onChange={(e) => setProvider(e.target.value)}>{connected.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
               <select className="select" style={{ width: 90 }} value={count} onChange={(e) => setCount(+e.target.value)}>{[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n} adet</option>)}</select>
               <AsyncButton className="btn primary" disabled={!prompt.trim() || !companyId} busyText="Üretiliyor…" onClick={async () => {
-                const r = await api.post('/api/studio/generate', { companyId, prompt, provider, width: w, height: h, count, inspirationIds: insp });
+                const r = await api.post('/api/studio/generate', { companyId, prompt, provider, width: w, height: h, count, inspirationIds: insp, productFileId: productId || undefined });
                 setResults((x) => [...r.files, ...x]);
                 toast(`${r.files.length} görsel markanın dosyalarına eklendi`);
               }}><Icon name="wand" />Üret</AsyncButton>

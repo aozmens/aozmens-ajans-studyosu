@@ -1,5 +1,6 @@
 // Dışa aktarma: iş klasörü (ZIP) — metinler, içerik takvimi (CSV), tasarımlar boyut klasörlerinde PNG + SVG.
 import fs from 'node:fs';
+import path from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import * as store from './store.js';
 import * as render from './render.js';
@@ -78,3 +79,61 @@ export function jobFiles(job, { only, png = true, svg = true } = {}) {
 }
 
 export const formatLabel = (k) => FORMATS[k]?.label || k;
+
+// Bitmiş işi markanın klasörüne yazar: "09 İşler/2026-11-02 Kasım sosyal medya/…" (PNG tasarımlar, metinler, takvim)
+export function writeJobFolder(job) {
+  const company = store.getCompany(job.companyId);
+  if (!company) return null;
+  const { files } = jobFiles(job, { svg: false });
+  const rel = `${store.FOLDERS.jobs}/${store.safeName(`${job.createdAt.slice(0, 10)} ${job.title}`, 70)}`;
+  const dir = store.assetDir(company.id, rel);
+  for (const [name, data] of Object.entries(files)) {
+    const p = path.join(dir, ...name.split('/'));
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, data);
+  }
+  const bb = job.brandBookId && company.brandBooks?.find((b) => b.id === job.brandBookId);
+  if (bb) try { fs.copyFileSync(store.assetPath(company.id, bb.file), path.join(dir, path.basename(bb.file))); } catch {}
+  return rel;
+}
+
+// Firma klasörünün tamamı (ZIP için): "Firma adı/01 Logolar/…" — türetilmiş kopyalar (.kopyalar) hariç
+export function companyFolderFiles(cid) {
+  const c = store.getCompany(cid);
+  if (!c) throw new Error('Marka bulunamadı');
+  const root = store.ownerDir(cid);
+  const out = {};
+  const walk = (d, rel) => {
+    if (!fs.existsSync(d)) return;
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      if (e.name === '.kopyalar') continue;
+      if (e.isDirectory()) walk(path.join(d, e.name), `${rel}${e.name}/`);
+      else out[`${rel}${e.name}`] = fs.readFileSync(path.join(d, e.name));
+    }
+  };
+  walk(root, '');
+  return { name: c.folder || c.name, files: out };
+}
+
+// Klasör ağacı (arayüzde göstermek için): her alt klasördeki dosya sayısı ve boyutu
+export function companyTree(cid) {
+  const c = store.getCompany(cid);
+  const root = store.ownerDir(cid);
+  const folders = Object.values(store.FOLDERS).map((name) => {
+    const d = path.join(root, name);
+    const items = [];
+    const walk = (dd, rel) => {
+      if (!fs.existsSync(dd)) return;
+      for (const e of fs.readdirSync(dd, { withFileTypes: true })) {
+        if (e.name === '.kopyalar') continue;
+        const p = path.join(dd, e.name);
+        if (e.isDirectory()) walk(p, `${rel}${e.name}/`);
+        else { const st = fs.statSync(p); items.push({ path: `${rel}${e.name}`, size: st.size, at: st.mtime.toISOString(), url: store.assetUrl(cid, `${name}/${rel}${e.name}`) }); }
+      }
+    };
+    walk(d, '');
+    items.sort((a, b) => b.at.localeCompare(a.at));
+    return { name, count: items.length, size: items.reduce((n, x) => n + x.size, 0), items: items.slice(0, 200) };
+  });
+  return { root: path.resolve(root), folder: c?.folder, folders };
+}

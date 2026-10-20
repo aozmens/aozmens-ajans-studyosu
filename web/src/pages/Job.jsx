@@ -62,9 +62,16 @@ export default function Job({ id }) {
           <StatusBadge status={job.status} running={running} />
           {running ? <AsyncButton className="btn" onClick={() => api.post(`/api/jobs/${id}/cancel`)}><Icon name="stop" />Durdur</AsyncButton>
             : job.status !== 'done' && <AsyncButton className="btn" onClick={() => api.post(`/api/jobs/${id}/resume`)}><Icon name="refresh" />Kaldığı yerden devam</AsyncButton>}
+          {!running && job.designs.length > 0 && meta.providers.some((p) => p.id === 'openai' && p.connected) && (
+            <AsyncButton className="btn" title="Bütün tasarımları OpenAI GPT Image ile yeniden üret; eskileri Geri al ile döner" onClick={async () => {
+              if (!confirmAsk(`${job.designs.reduce((n, d) => n + d.variants.reduce((m, v) => m + v.frames.length, 0), 0)} tasarım GPT Image ile yeniden üretilsin mi? Metinler ve plan korunur; görsel başına ~0,17 $.`)) return;
+              await api.post(`/api/jobs/${id}/redesign`, { engine: 'gpt' }); toast('Tasarımlar GPT Image ile yeniden üretiliyor');
+            }}><Icon name="wand" />GPT Image ile tasarla</AsyncButton>
+          )}
           <div className="row" style={{ gap: 0 }}>
             <button className="btn" style={{ borderRadius: '9px 0 0 9px' }} onClick={() => download(`/api/jobs/${id}/export.zip`)}><Icon name="download" />Klasör (ZIP)</button>
             <button className="btn" style={{ borderRadius: '0 9px 9px 0', marginLeft: -1 }} disabled={!job.designs.length} title="Yalnızca tasarımlar, boyut klasörlerinde" onClick={() => download(`/api/jobs/${id}/export.zip?only=designs`)}>Tasarımlar</button>
+            <AsyncButton className="btn" style={{ marginLeft: 6 }} title="Markanın 09 İşler klasörüne yaz" onClick={async () => { const r = await api.post(`/api/jobs/${id}/save-to-folder`); toast(`Klasöre kaydedildi: ${r.folder}`); }}><Icon name="folder" />Klasöre kaydet</AsyncButton>
           </div>
           {!running && <button className="btn ghost danger icon" title="İşi sil" onClick={async () => { if (confirmAsk('İş silinsin mi?')) { await api.del(`/api/jobs/${id}`); go(c ? `marka/${c.id}/isler` : ''); } }}><Icon name="trash" /></button>}
         </div>

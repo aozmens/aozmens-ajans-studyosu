@@ -1,5 +1,6 @@
 // SVG varlıkları ve çizim: yazı tipleri (assets/fonts), {{LOGO}} / {{IMG:id}} yer tutucuları,
 // SVG → PNG/JPEG (resvg, sunucuda; tarayıcı gerekmez) ve görsel küçültme (sharp).
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -7,7 +8,7 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import * as store from './store.js';
 
-const FONT_DIR = new URL('../assets/fonts/', import.meta.url).pathname;
+const FONT_DIR = fileURLToPath(new URL('../assets/fonts/', import.meta.url));
 let fontMeta = null;
 
 export function fonts() {

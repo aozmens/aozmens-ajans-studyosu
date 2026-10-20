@@ -1,4 +1,4 @@
-# Ajans Stüdyosu
+# Agent-cy
 
 Yapay zekâ ajanlarından oluşan dijital ajans: markalar, ilham arşivi, Logo Stüdyosu, aylık sosyal medya planları, post / story / carousel tasarımları, ajan eğitimi ve token takibi. Web uygulamasıdır; kendi subdomaininde çalışır ve GitHub `main` dalına gelen her değişiklik siteye otomatik yüklenir.
 
@@ -12,10 +12,18 @@ Yapay zekâ ajanlarından oluşan dijital ajans: markalar, ilham arşivi, Logo S
 | Eğitilebilir ajanlar | Her çıktıda **Ajanı eğit**; geri bildirim kalıcı direktiflere çevrilir. **Ajan ekibi**'nden direktif ekle / sil, sistem promptunu düzenle |
 | Marka uyumu | **Markayı Öğren** (logo, görseller, örnek tasarımlar, site → marka profili) ve **İlham Al** (arşivden ilham bağla). Yeni işte ikisi de açılıp kapatılabilir |
 | Token görünürlüğü | İş sayfasında toplam ve adım adım token / maliyet; **Token ve maliyet** ekranında günlük, ajan, marka ve model kırılımı |
-| Higgsfield, Clipdrop… | Ayarlar → Entegrasyonlar: Clipdrop, fal.ai (Flux), OpenAI, Gemini, Higgsfield. Ajan ekibi'nden ajanlara bağlanır |
+| Görsel üretimi | Varsayılan **OpenAI GPT Image 2.5 Flare** (`gpt-image-2.5-flare`; model hesapta yoksa Sunburst → gpt-image-2 → gpt-image-1'e geçer) (ürün, logo ve mockup görselleri referans olarak gider). Ayarlar → Entegrasyonlar: ayrıca Clipdrop, fal.ai (Flux), Gemini, Higgsfield. Ajan ekibi'nden ajanlara bağlanır |
 | Yalnızca ilgili ajanlar | Her iş türünün kendi ajan listesi var; yeni işte istemediğin ajanı kapatırsın |
 | Klasör çıktısı | İş → **Klasör (ZIP)** ya da yalnızca **Tasarımlar**: `tasarimlar/Post (1080x1350)/`, `Story (1080x1920)/`, `Carousel/<içerik>/slayt-NN.png`, SVG'ler, metinler, içerik takvimi (CSV) |
 | Post ve Story | Yeni işte boyutları seç; her tasarım hepsinde üretilir. Sonradan "Başka boyutta da üret" |
+| Tasarım dili PDF'i | İlham arşivi → **Tasarım dili (PDF)**: seçilen görsellerin promptları, paletleri ve yazı tipleri tek ana prompt + kurallara çevrilir. PDF'in içinde yapay zekâ araçlarının otomatik algıladığı JSON bloğu ve `tasarim-dili.json` eki var |
+| Mockuplar | İlham arşivi → **Mockuplar**: örnek mockup yükle; logonun yeri, yüzey tonu ve sahnenin piksel piksel promptu çıkarılır. 4 hazır mockup (kartvizit, uygulama ikonu, tabela, çanta) marka renkleriyle çizilir |
+| Marka dosyası (PDF) | Yeni işte **Marka dosyası hazırla** (varsayılan açık) ya da Marka → **Marka dosyası**: farklı zeminlerde logo, uygulama ikonu, yazı tipleri, renkler (HEX/RGB/CMYK), seçilen mockuplar, en sonda Agent-cy logosu + iletişim + "All Rights Reserved" |
+| Ürün promptu | Görsel stüdyosu → **Ürün**: ürün görseli yükle (piksel piksel taranır) ya da ürünü tarif et; ilhamın ana ürünü bununla değiştirilir |
+| Renk ve yazı tipi | Marka profili → hazır **kartelalar** ya da özel renkler, yazı tipi eşleşmeleri. **Müşteriye seçim bağlantısı** ile müşteri kendisi seçer |
+| /webclone | Marka → **Web klon**: hızlı kopya, Claude ile yeniden kur ya da arka planda **Claude Code** ile çalışan klon. Sonuçlar markanın `08 Web Klon` klasörüne |
+| Firma klasörleri | Her firmanın kendi klasörü: `firmalar/<Firma>/01 Logolar … 10 Diğer`. Marka → **Klasör** sekmesinden gör, ZIP indir (Windows sürümünde Gezgin'de aç) |
+| Windows | `npm run build && npm run build:windows` → `dist-windows/Agent-cy-Windows.zip` (Agent-cy.exe + taşınabilir Node). Veriler `Belgeler\Agent-cy` |
 | Carousel | Yeni işte carousel sayısı ve slayt sayısı; revizyon tüm slaytlara ya da tek slayta |
 
 ## Yayına alma (Railway)
@@ -52,6 +60,8 @@ web/           React arayüz (Vite)
 agents/        15 ajanın talimatları (Markdown + frontmatter)
 assets/fonts/  Tasarımlarda kullanılan 14 yazı tipi ailesi (OFL)
 test/          Uçtan uca test ve sahte Claude sunucusu
+desktop/       Windows başlatıcısı (Go): Agent-cy.exe
+scripts/       Windows paketi ve yazı tipi betikleri
 ```
 
-Veriler `DATA_DIR` (varsayılan `./data`, sunucuda `/data`) altında: `db.json` + `assets/<marka>/…`. Ayarlar → Genel → **Yedeği indir** hepsini tek ZIP yapar.
+Veriler `DATA_DIR` (varsayılan `./data`, sunucuda `/data`, Windows'ta `Belgeler\Agent-cy`) altında: `db.json` + `firmalar/<Firma adı>/…` (ilham arşivi `assets/_ajans/…`). Ayarlar → Genel → **Yedeği indir** hepsini tek ZIP yapar.

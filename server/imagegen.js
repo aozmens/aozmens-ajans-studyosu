@@ -1,4 +1,4 @@
-// Görsel motorları: Clipdrop, fal.ai (Flux), OpenAI Images, Google Gemini, Higgsfield.
+// Görsel motorları: OpenAI (gpt-image-2.5-flare, varsayılan), Clipdrop, fal.ai (Flux), Google Gemini, Higgsfield.
 // Hepsi aynı arayüzü kullanır: generate({ prompt, width, height, refs }) → [{ buf, mime }]
 import * as store from './store.js';
 
@@ -13,13 +13,15 @@ export function nearestRatio(w, h, allowed = RATIOS) {
 export const APPROX_COST = { clipdrop: 0.02, fal: 0.06, openai: 0.17, gemini: 0.04, higgsfield: 0.05 };
 
 export const PROVIDERS = {
+  openai: { label: 'OpenAI (GPT Image 2.5)', kinds: ['görsel', 'referanslı görsel'], refs: true },
   clipdrop: { label: 'Clipdrop', kinds: ['görsel', 'arka plan silme', 'büyütme'], refs: false },
   fal: { label: 'fal.ai (Flux)', kinds: ['görsel'], refs: false },
-  openai: { label: 'OpenAI Images', kinds: ['görsel'], refs: false },
   gemini: { label: 'Google Gemini (Nano Banana)', kinds: ['görsel', 'referanslı görsel'], refs: true },
   higgsfield: { label: 'Higgsfield', kinds: ['görsel', 'video'], refs: false },
 };
 
+// Test ve vekil sunucu için değiştirilebilir
+const OPENAI_BASE = (process.env.OPENAI_BASE_URL || 'https://api.openai.com').replace(/\/+$/, '');
 const cfg = (name) => store.getSettings(false).integrations[name] || {};
 
 export function isConnected(name) {
@@ -29,6 +31,12 @@ export function isConnected(name) {
 }
 
 export const connected = () => Object.keys(PROVIDERS).filter(isConnected);
+
+// Ayarlardaki varsayılan motor bağlıysa o, değilse bağlı olan ilk motor (sırada önce OpenAI)
+export function defaultProvider() {
+  const s = store.getSettings(false).imageProvider;
+  return s && isConnected(s) ? s : connected()[0];
+}
 
 async function check(res, label) {
   if (res.ok) return res;
@@ -65,16 +73,28 @@ const impl = {
     return Promise.all(urls.map((u) => download(u, signal)));
   },
 
-  async openai({ prompt, width, height, signal }) {
+  // Referans görsel (ürün, logo, mockup) varsa images/edits ile birlikte gönderilir.
+  // Seçilen model hesapta yoksa sıradaki modele geçilir; çalışan model hatırlanır.
+  async openai(opts) {
     const c = cfg('openai');
-    const ratio = width / height;
-    const size = ratio > 1.15 ? '1536x1024' : ratio < 0.87 ? '1024x1536' : '1024x1024';
-    const r = await check(await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST', headers: { Authorization: `Bearer ${c.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: c.model || 'gpt-image-1', prompt, size, quality: 'high', n: 1 }), signal,
-    }), 'OpenAI');
-    const j = await r.json();
-    return (j.data || []).map((d) => ({ buf: Buffer.from(d.b64_json, 'base64'), mime: 'image/png' }));
+    const bad = store.openaiKeyProblem(c.apiKey);
+    if (bad) throw new Error(bad);
+    const chain = openaiChain(c.model);
+    const start = Math.max(0, chain.indexOf(openaiWorking.get(c.model)));
+    let lastMissing = '';
+    for (const model of chain.slice(start)) {
+      try {
+        const out = await openaiOnce(c.apiKey, model, opts);
+        out.model = model;
+        openaiWorking.set(c.model, model);
+        if (model !== chain[0]) console.log(`OpenAI: ${chain[0]} kullanılamadı, ${model} ile üretildi.`);
+        return out;
+      } catch (e) {
+        if (!e.modelMissing) throw e;
+        lastMissing = model;
+      }
+    }
+    throw new Error(`OpenAI hesabında kullanılabilir görsel modeli bulunamadı (son denenen: ${lastMissing}). Ayarlar → Entegrasyonlar → OpenAI → Model alanından başka bir model seç.`);
   },
 
   async gemini({ prompt, width, height, refs = [], signal }) {
@@ -103,6 +123,45 @@ const impl = {
 };
 
 // Higgsfield: istek gönder → status_url'yi tamamlanana kadar yokla
+// OpenAI görsel modelleri: önerilen sırayla. Seçilen model başa alınır; hesapta yoksa sıradakine geçilir.
+export const OPENAI_MODELS = [
+  ['gpt-image-2.5-flare', 'GPT Image 2.5 Flare (önerilen, hızlı)'],
+  ['gpt-image-2.5-sunburst', 'GPT Image 2.5 Sunburst (premium, ince düzenleme)'],
+  ['gpt-image-2', 'GPT Image 2'],
+  ['gpt-image-1', 'GPT Image 1'],
+];
+const openaiWorking = new Map();
+const openaiChain = (chosen) => [...new Set([String(chosen || '').trim() || OPENAI_MODELS[0][0], ...OPENAI_MODELS.map((m) => m[0])])];
+
+async function openaiOnce(apiKey, model, { prompt, width, height, refs = [], signal }) {
+    const ratio = width / height;
+    const size = ratio > 1.15 ? '1536x1024' : ratio < 0.87 ? '1024x1536' : '1024x1024';
+    const headers = { Authorization: `Bearer ${apiKey}` };
+    let req;
+    if (refs.length) {
+      const form = new FormData();
+      for (const [k, v] of Object.entries({ model, prompt, size, quality: 'high', n: '1' })) form.append(k, v);
+      refs.slice(0, 6).forEach((x, i) => form.append('image[]', new Blob([Buffer.from(x.data, 'base64')], { type: x.mime }), `ref-${i + 1}.${(x.mime.split('/')[1] || 'png').replace('jpeg', 'jpg')}`));
+      req = fetch(`${OPENAI_BASE}/v1/images/edits`, { method: 'POST', headers, body: form, signal });
+    } else {
+      req = fetch(`${OPENAI_BASE}/v1/images/generations`, {
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt, size, quality: 'high', n: 1 }), signal,
+      });
+    }
+    const res = await req;
+    if (res.status === 401) throw new Error('OpenAI anahtarı geçersiz ya da iptal edilmiş (HTTP 401). platform.openai.com/api-keys adresinden yeni bir anahtar oluşturup Ayarlar → Entegrasyonlar → OpenAI alanına yapıştır.');
+    if (res.status === 403) throw new Error(`OpenAI bu modele erişim vermiyor (HTTP 403). ${model} için kuruluş doğrulaması gerekebilir: platform.openai.com/settings/organization/general`);
+    if (res.status === 400 || res.status === 404) {
+      const txt = await res.text();
+      if (/does not exist|model_not_found|invalid model|unknown model|not supported/i.test(txt)) throw Object.assign(new Error(`${model} bulunamadı`), { modelMissing: true });
+      throw new Error(`OpenAI hatası (HTTP ${res.status}): ${txt.slice(0, 300)}`);
+    }
+    const r = await check(res, 'OpenAI');
+    const j = await r.json();
+    return (j.data || []).map((d) => ({ buf: Buffer.from(d.b64_json, 'base64'), mime: 'image/png' }));
+}
+
 async function higgsfieldRun(model, body, signal) {
   const c = cfg('higgsfield');
   let extra = {};
@@ -123,12 +182,12 @@ async function higgsfieldRun(model, body, signal) {
 }
 
 export async function generate(provider, { prompt, width = 1080, height = 1350, refs = [], signal }) {
-  const name = provider || store.getSettings(false).imageProvider || connected()[0];
+  const name = provider || defaultProvider();
   if (!name || !impl[name]) throw new Error('Görsel motoru seçilmemiş. Ayarlar → Entegrasyonlar bölümünden bir görsel motoru bağlayın.');
   if (!isConnected(name)) throw new Error(`${PROVIDERS[name].label} bağlı değil. Ayarlar → Entegrasyonlar bölümünden API anahtarını girin.`);
   const out = await impl[name]({ prompt, width, height, refs, signal });
   store.logUsage({ kind: 'image', provider: name, images: out.length, imageCost: APPROX_COST[name] * out.length });
-  return { provider: name, images: out, cost: APPROX_COST[name] * out.length };
+  return { provider: name, model: out.model || '', images: out, cost: APPROX_COST[name] * out.length };
 }
 
 // Clipdrop: arka planı siler (şeffaf PNG)
@@ -171,6 +230,22 @@ export async function test(name) {
     // Ücretsiz kontrol yok; küçük bir istek gönderir
     await impl.clipdrop({ prompt: 'a single small red dot on white background' });
     return 'Bağlantı tamam';
+  }
+  if (name === 'openai') {
+    // Ücretsiz kontrol: anahtar biçimi + seçilen model (yoksa sıradaki) hesapta var mı
+    const c = cfg('openai');
+    const bad = store.openaiKeyProblem(c.apiKey);
+    if (bad) throw new Error(bad);
+    const chain = openaiChain(c.model);
+    for (const model of chain) {
+      const r = await fetch(`${OPENAI_BASE}/v1/models/${encodeURIComponent(model)}`, { headers: { Authorization: `Bearer ${c.apiKey}` } });
+      if (r.status === 401) throw new Error('OpenAI anahtarı geçersiz ya da iptal edilmiş (HTTP 401). platform.openai.com/api-keys adresinden yeni anahtar oluştur.');
+      if (r.status === 404) continue;
+      await check(r, 'OpenAI');
+      openaiWorking.set(c.model, model);
+      return model === chain[0] ? `Bağlantı tamam (${model})` : `Bağlantı tamam. ${chain[0]} bu hesapta yok; ${model} kullanılacak.`;
+    }
+    throw new Error(`Anahtar çalışıyor ama bu hesapta görsel modeli görünmüyor (${chain.join(', ')}).`);
   }
   await generate(name, { prompt: 'a minimal flat red circle on a white background', width: 1024, height: 1024 });
   return 'Bağlantı tamam (test görseli üretildi)';

@@ -24,11 +24,11 @@ export const DEFAULT_SETTINGS = {
   theme: 'system',
   designQa: 1, // her tasarımdan sonra çizip kontrol eden tur sayısı (0-2)
   fallbacks: true, // Claude reddederse sunucu tarafında yedek modele geç
-  imageProvider: '', // varsayılan görsel motoru: clipdrop | fal | openai | gemini | higgsfield
+  imageProvider: 'openai', // varsayılan görsel motoru: openai (gpt-image-2.5) | clipdrop | fal | gemini | higgsfield
   integrations: {
     clipdrop: { apiKey: '' },
     fal: { apiKey: '', model: 'fal-ai/flux-pro/v1.1-ultra' },
-    openai: { apiKey: '', model: 'gpt-image-1' },
+    openai: { apiKey: '', model: 'gpt-image-2.5' },
     gemini: { apiKey: '', model: 'gemini-2.5-flash-image' },
     higgsfield: { keyId: '', secret: '', imageModel: 'higgsfield-ai/soul/v2/standard', videoModel: '', extra: '' },
   },
@@ -129,6 +129,12 @@ export function init(dir) {
   db = { ...emptyDb(), ...db };
   db.settings = mergeSettings(DEFAULT_SETTINGS, db.settings || {});
   if (db.settings.agencyName === 'AOZTECH Ajans') db.settings.agencyName = 'Agent-cy'; // programın adı Agent-cy oldu
+  // Görsel üretiminde varsayılan OpenAI gpt-image-2.5 oldu (bir kez uygulanır; sonra Ayarlar'dan değiştirilebilir)
+  if ((db.settings.imageDefaults || 0) < 1) {
+    db.settings.imageProvider = 'openai';
+    db.settings.integrations.openai.model = 'gpt-image-2.5';
+    db.settings.imageDefaults = 1;
+  }
   if (!db.tools) db.tools = DEFAULT_TOOLS.map((t) => ({ ...t, id: id(), guide: '', createdAt: now() }));
   for (const c of db.companies) migrateCompany(c);
   for (const c of db.companies) ensureFolder(c);

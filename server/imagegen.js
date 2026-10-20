@@ -1,4 +1,4 @@
-// Görsel motorları: Clipdrop, fal.ai (Flux), OpenAI Images, Google Gemini, Higgsfield.
+// Görsel motorları: OpenAI (gpt-image-2.5, varsayılan), Clipdrop, fal.ai (Flux), Google Gemini, Higgsfield.
 // Hepsi aynı arayüzü kullanır: generate({ prompt, width, height, refs }) → [{ buf, mime }]
 import * as store from './store.js';
 
@@ -13,9 +13,9 @@ export function nearestRatio(w, h, allowed = RATIOS) {
 export const APPROX_COST = { clipdrop: 0.02, fal: 0.06, openai: 0.17, gemini: 0.04, higgsfield: 0.05 };
 
 export const PROVIDERS = {
+  openai: { label: 'OpenAI (gpt-image-2.5)', kinds: ['görsel', 'referanslı görsel'], refs: true },
   clipdrop: { label: 'Clipdrop', kinds: ['görsel', 'arka plan silme', 'büyütme'], refs: false },
   fal: { label: 'fal.ai (Flux)', kinds: ['görsel'], refs: false },
-  openai: { label: 'OpenAI Images', kinds: ['görsel'], refs: false },
   gemini: { label: 'Google Gemini (Nano Banana)', kinds: ['görsel', 'referanslı görsel'], refs: true },
   higgsfield: { label: 'Higgsfield', kinds: ['görsel', 'video'], refs: false },
 };
@@ -29,6 +29,12 @@ export function isConnected(name) {
 }
 
 export const connected = () => Object.keys(PROVIDERS).filter(isConnected);
+
+// Ayarlardaki varsayılan motor bağlıysa o, değilse bağlı olan ilk motor (sırada önce OpenAI)
+export function defaultProvider() {
+  const s = store.getSettings(false).imageProvider;
+  return s && isConnected(s) ? s : connected()[0];
+}
 
 async function check(res, label) {
   if (res.ok) return res;
@@ -65,14 +71,26 @@ const impl = {
     return Promise.all(urls.map((u) => download(u, signal)));
   },
 
-  async openai({ prompt, width, height, signal }) {
+  // Referans görsel (ürün, logo, mockup) varsa images/edits ile birlikte gönderilir
+  async openai({ prompt, width, height, refs = [], signal }) {
     const c = cfg('openai');
+    const model = c.model || 'gpt-image-2.5';
     const ratio = width / height;
     const size = ratio > 1.15 ? '1536x1024' : ratio < 0.87 ? '1024x1536' : '1024x1024';
-    const r = await check(await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST', headers: { Authorization: `Bearer ${c.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: c.model || 'gpt-image-1', prompt, size, quality: 'high', n: 1 }), signal,
-    }), 'OpenAI');
+    const headers = { Authorization: `Bearer ${c.apiKey}` };
+    let req;
+    if (refs.length) {
+      const form = new FormData();
+      for (const [k, v] of Object.entries({ model, prompt, size, quality: 'high', n: '1' })) form.append(k, v);
+      refs.slice(0, 4).forEach((x, i) => form.append('image[]', new Blob([Buffer.from(x.data, 'base64')], { type: x.mime }), `ref-${i + 1}.${(x.mime.split('/')[1] || 'png').replace('jpeg', 'jpg')}`));
+      req = fetch('https://api.openai.com/v1/images/edits', { method: 'POST', headers, body: form, signal });
+    } else {
+      req = fetch('https://api.openai.com/v1/images/generations', {
+        method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, prompt, size, quality: 'high', n: 1 }), signal,
+      });
+    }
+    const r = await check(await req, 'OpenAI');
     const j = await r.json();
     return (j.data || []).map((d) => ({ buf: Buffer.from(d.b64_json, 'base64'), mime: 'image/png' }));
   },
@@ -123,7 +141,7 @@ async function higgsfieldRun(model, body, signal) {
 }
 
 export async function generate(provider, { prompt, width = 1080, height = 1350, refs = [], signal }) {
-  const name = provider || store.getSettings(false).imageProvider || connected()[0];
+  const name = provider || defaultProvider();
   if (!name || !impl[name]) throw new Error('Görsel motoru seçilmemiş. Ayarlar → Entegrasyonlar bölümünden bir görsel motoru bağlayın.');
   if (!isConnected(name)) throw new Error(`${PROVIDERS[name].label} bağlı değil. Ayarlar → Entegrasyonlar bölümünden API anahtarını girin.`);
   const out = await impl[name]({ prompt, width, height, refs, signal });

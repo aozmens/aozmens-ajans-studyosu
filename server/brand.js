@@ -245,7 +245,7 @@ export async function generateImages({ companyId, prompt, provider, width = 1080
   if (!c) throw new Error('Önce bir marka seçin; üretilen görseller markanın dosyalarına eklenir.');
   if (!String(prompt || '').trim()) throw new Error('Prompt boş');
   const refs = [];
-  const p = provider || settings().imageProvider || imagegen.connected()[0];
+  const p = provider || imagegen.defaultProvider();
   const product = productFileId ? c.files.find((f) => f.id === productFileId) : null;
   if (p && imagegen.PROVIDERS[p]?.refs && product) {
     try { const b = await render.imageBlockFromFile(store.assetPath(c.id, product.designFile || product.file), 1024); refs.push({ mime: b.source.media_type, data: b.source.data }); } catch {}

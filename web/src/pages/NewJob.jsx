@@ -36,7 +36,7 @@ export default function NewJob({ initial, onClose }) {
   const [pickInsp, setPickInsp] = useState(false);
   const [aiImages, setAiImages] = useState(false);
   const connected = meta.providers.filter((p) => p.connected);
-  const [imageProvider, setImageProvider] = useState(settings.imageProvider || connected[0]?.id || '');
+  const [imageProvider, setImageProvider] = useState((connected.find((p) => p.id === settings.imageProvider) || connected[0])?.id || '');
   const [tools, setTools] = useState([]);
   const [toolList, setToolList] = useState([]);
   const [brandBook, setBrandBook] = useState(true);

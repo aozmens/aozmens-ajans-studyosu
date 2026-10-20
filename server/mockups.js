@@ -261,7 +261,7 @@ export async function apply(mid, companyId, { mode = 'yerlestir', provider, prom
   const c = store.getCompany(companyId);
   if (!m || !c) throw new Error('Mockup ya da marka bulunamadı');
   if (mode === 'ai') {
-    const p = provider || settings().imageProvider || imagegen.connected()[0];
+    const p = provider || imagegen.defaultProvider();
     if (!p || !imagegen.isConnected(p)) throw new Error('Görsel motoru bağlı değil (Ayarlar → Entegrasyonlar).');
     const text = prompt || (await promptFor(mid, companyId)).prompt;
     const refs = [];

@@ -714,7 +714,7 @@ function assetBlocks(company, assets) {
 async function ensureAiImage(job, d, variant, company, signal) {
   const o = job.options || {};
   if (!o.aiImages || d.aiImages?.[variant.key] || !d.ai_gorsel_prompt) return;
-  const provider = o.imageProvider || settings().imageProvider || imagegen.connected()[0];
+  const provider = o.imageProvider || imagegen.defaultProvider();
   if (!provider || !imagegen.isConnected(provider)) return;
   // Aynı oranda başka varyant için üretilmiş görsel varsa onu kullan
   const same = (d.variants || []).find((v) => v.key !== variant.key && d.aiImages?.[v.key] && Math.abs(v.width / v.height - variant.width / variant.height) < 0.05);

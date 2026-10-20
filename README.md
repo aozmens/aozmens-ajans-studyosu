@@ -12,7 +12,7 @@ Yapay zekâ ajanlarından oluşan dijital ajans: markalar, ilham arşivi, Logo S
 | Eğitilebilir ajanlar | Her çıktıda **Ajanı eğit**; geri bildirim kalıcı direktiflere çevrilir. **Ajan ekibi**'nden direktif ekle / sil, sistem promptunu düzenle |
 | Marka uyumu | **Markayı Öğren** (logo, görseller, örnek tasarımlar, site → marka profili) ve **İlham Al** (arşivden ilham bağla). Yeni işte ikisi de açılıp kapatılabilir |
 | Token görünürlüğü | İş sayfasında toplam ve adım adım token / maliyet; **Token ve maliyet** ekranında günlük, ajan, marka ve model kırılımı |
-| Higgsfield, Clipdrop… | Ayarlar → Entegrasyonlar: Clipdrop, fal.ai (Flux), OpenAI, Gemini, Higgsfield. Ajan ekibi'nden ajanlara bağlanır |
+| Görsel üretimi | Varsayılan **OpenAI gpt-image-2.5** (ürün, logo ve mockup görselleri referans olarak gider). Ayarlar → Entegrasyonlar: ayrıca Clipdrop, fal.ai (Flux), Gemini, Higgsfield. Ajan ekibi'nden ajanlara bağlanır |
 | Yalnızca ilgili ajanlar | Her iş türünün kendi ajan listesi var; yeni işte istemediğin ajanı kapatırsın |
 | Klasör çıktısı | İş → **Klasör (ZIP)** ya da yalnızca **Tasarımlar**: `tasarimlar/Post (1080x1350)/`, `Story (1080x1920)/`, `Carousel/<içerik>/slayt-NN.png`, SVG'ler, metinler, içerik takvimi (CSV) |
 | Post ve Story | Yeni işte boyutları seç; her tasarım hepsinde üretilir. Sonradan "Başka boyutta da üret" |

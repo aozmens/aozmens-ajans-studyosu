@@ -18,7 +18,7 @@ export default function Studio() {
   const [prompt, setPrompt] = useState('');
   const [note, setNote] = useState('');
   const [usage, setUsage] = useState(null);
-  const [provider, setProvider] = useState(settings.imageProvider || connected[0]?.id || '');
+  const [provider, setProvider] = useState((connected.find((p) => p.id === settings.imageProvider) || connected[0])?.id || '');
   const [count, setCount] = useState(1);
   const [useBrandProfile, setUseBrandProfile] = useState(true);
   const [results, setResults] = useState([]);

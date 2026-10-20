@@ -21,16 +21,37 @@ if (!fs.existsSync(path.join(ROOT, 'web/dist/index.html'))) throw new Error('Ön
 
 step('Klasör hazırlanıyor');
 fs.rmSync(PKG, { recursive: true, force: true });
-fs.mkdirSync(APP, { recursive: true });
+fs.mkdirSync(path.join(APP, 'server'), { recursive: true });
 fs.mkdirSync(CACHE, { recursive: true });
-for (const d of ['server', 'agents', 'assets', 'web/dist']) fs.cpSync(path.join(ROOT, d), path.join(APP, d), { recursive: true });
-for (const f of ['package.json', 'package-lock.json']) fs.copyFileSync(path.join(ROOT, f), path.join(APP, f));
+for (const d of ['agents', 'assets', 'web/dist']) fs.cpSync(path.join(ROOT, d), path.join(APP, d), { recursive: true });
+
+// Sunucu tek dosyaya paketlenir: zip binlerce küçük dosya yerine ~1000 dosya içerir, Windows'ta hızlı çıkar.
+// Yerel ikili ya da veri dosyası okuyan paketler (sharp, resvg, pdfkit) dışarıda kalır.
+step('Sunucu tek dosyaya paketleniyor');
+const EXTERNAL = ['sharp', '@resvg/resvg-js', 'pdfkit'];
+const esbuild = path.join(ROOT, 'web/node_modules/.bin/esbuild');
+run(esbuild, [path.join(ROOT, 'server/index.js'), '--bundle', '--platform=node', '--format=esm', '--target=node22', '--log-level=warning',
+  ...EXTERNAL.map((x) => `--external:${x}`),
+  '--banner:js=import { createRequire as __cr } from "node:module"; const require = __cr(import.meta.url);',
+  `--outfile=${path.join(APP, 'server/index.js')}`]);
+const ver = (name) => JSON.parse(fs.readFileSync(path.join(ROOT, 'node_modules', name, 'package.json'), 'utf8')).version;
+fs.writeFileSync(path.join(APP, 'package.json'), JSON.stringify({ name: 'agent-cy', version, private: true, type: 'module', dependencies: Object.fromEntries(EXTERNAL.map((x) => [x, ver(x)])) }, null, 2));
 
 step('Bağımlılıklar (Windows x64) kuruluyor');
-run('npm', ['ci', '--omit=dev', '--no-audit', '--no-fund', '--ignore-scripts', '--os=win32', '--cpu=x64'], { cwd: APP });
+run('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--no-package-lock', '--ignore-scripts', '--os=win32', '--cpu=x64'], { cwd: APP });
 for (const need of ['@img/sharp-win32-x64', '@resvg/resvg-js-win32-x64-msvc']) {
   if (!fs.existsSync(path.join(APP, 'node_modules', need))) throw new Error(`${need} kurulmadı`);
 }
+// Çalışmada gerekmeyen dosyalar (belgeler, tip tanımları, kaynak haritaları, WebAssembly yedeği)
+fs.rmSync(path.join(APP, 'node_modules/@img/sharp-wasm32'), { recursive: true, force: true });
+const prune = (d) => {
+  for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) prune(p);
+    else if (/\.(md|markdown|d\.ts|d\.mts|d\.cts|map|flow)$/i.test(e.name) || /\.ts$/.test(e.name)) fs.rmSync(p);
+  }
+};
+prune(path.join(APP, 'node_modules'));
 
 step(`Node ${NODE_VERSION} (win-x64) indiriliyor`);
 const zipName = `node-v${NODE_VERSION}-win-x64.zip`;
